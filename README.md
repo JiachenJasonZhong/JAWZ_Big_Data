@@ -1,1 +1,40 @@
-# aml-crypto-graph
+# Main Code Setup Guide
+
+## Step 1: Download the Repository and Setup the Environment
+
+Open the terminal and input the following commands:
+
+```bash
+git clone git@github.com:JiachenJasonZhong/JAWZ_Big_Data.git
+conda install mamba -n base -c conda-forge
+mamba env create -f /path/to/CSE_project5.yaml  # Replace /path/to/ with your specific path
+conda activate CSE_project5
+pip install sklearn-deap
+conda install scikit-learn=0.23.2
+pip install -U scikit-multiflow
+
+## Step 2: Modify the _data.py file 
+
+Add the following to line 9 in _data:
+
+import sys
+sys.path.append('/path/to/aml-crypto-graph/src/')  # Replace /path/to/ with your specific path
+
+## Step 3: Download the data 
+
+Download the following data sets and place them in the folder as shown in the photo labeled Data Setup (you have to make a separate elliptic file and place the various elliptic files in there)
+
+A note about the elliptic_embs.csv, that can be found in the following google drive link: 
+https://drive.google.com/drive/folders/1xxJgmMPKVGLymI90fX1JxHFU9GCEJvK-
+
+The other elliptic dataset can be found here: 
+
+https://www.kaggle.com/ellipticco/elliptic-data-set
+
+Please download the Complete.csv found in Account_Stats folder the following Github
+
+https://github.com/sfarrugia15/Ethereum_Fraud_Detection
+
+The weather data can be found here:
+
+http://users.rowan.edu/~polikar/res/nse/weather_data.zip
