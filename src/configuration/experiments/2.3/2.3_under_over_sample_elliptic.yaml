@@ -1,0 +1,17 @@
+##########################################################################
+# Dataset configuration 
+##########################################################################
+data: elliptic
+data_config_file: "configuration/data/ell_data_config_ncr.yaml"
+elliptic_args: 
+  inc_unknown: false 
+  encode_classes: true  
+  load_edges: true 
+  train_size: 0.7
+
+save_log: true 
+log_path: "logs/"
+output_dir: "data/elliptic_ncr_smote/"
+stratify_timestep: false
+sample_type: "smote"
+

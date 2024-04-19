@@ -1,0 +1,16 @@
+##########################################################################
+# Dataset configuration 
+##########################################################################
+data: elliptic
+data_config_file: "configuration/data/data_config.yaml"
+elliptic_args: 
+  inc_unknown: false 
+  encode_classes: true 
+  train_size: 0.7
+
+save_log: true 
+log_path: "logs/"
+output_dir: "data/elliptic_smote/"
+stratify_timestep: false
+sample_type: "smote"
+

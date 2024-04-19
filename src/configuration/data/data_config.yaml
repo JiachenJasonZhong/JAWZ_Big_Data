@@ -1,0 +1,22 @@
+# Config file to load data, change paths if data is located in a different dir 
+
+# https://www.kaggle.com/ellipticco/elliptic-data-set
+elliptic_dataset:
+  folder: data/elliptic/
+  classes_file: elliptic_txs_classes.csv
+  edges_file: elliptic_txs_edgelist.csv
+  feats_file: elliptic_txs_features.csv
+  embs_file: elliptic_embs.csv
+
+# https://github.com/sfarrugia15/Ethereum_Fraud_Detection/blob/master/Account_Stats/Complete.csv
+eth_accounts_dataset:
+  folder: data/eth_fraud/
+  accounts_file: eth_accounts.csv
+
+# http://users.rowan.edu/~polikar/res/nse/weather_data.zip
+noaa_weather_dataset:
+  processed: false
+  folder: data/noaa_weather/
+  features_file: NEweather_data.csv
+  classes_file: NEweather_class.csv
+
