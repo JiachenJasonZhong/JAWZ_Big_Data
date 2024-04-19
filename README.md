@@ -1,8 +1,11 @@
 # Main Code Setup Guide
 
+This guide provides step-by-step instructions to set up the environment, modify necessary files, and download the required datasets for the project.
+
+
 ## Step 1: Download the Repository and Setup the Environment
 
-Open the terminal and input the following commands:
+Follow these commands in your terminal to clone the repository and set up the environment:
 
 ```bash
 git clone git@github.com:JiachenJasonZhong/JAWZ_Big_Data.git
@@ -12,13 +15,16 @@ conda activate CSE_project5
 pip install sklearn-deap
 conda install scikit-learn=0.23.2
 pip install -U scikit-multiflow
+```
 
 ## Step 2: Modify the _data.py file 
 
-Add the following to line 9 in _data:
+# Add the following to line 9 in _data:
 
+```python
 import sys
 sys.path.append('/path/to/aml-crypto-graph/src/')  # Replace /path/to/ with your specific path
+```
 
 ## Step 3: Download the data 
 
