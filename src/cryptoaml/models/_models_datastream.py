@@ -7,15 +7,15 @@ import xgboost as xgb
 from collections import Counter
 
 from skmultiflow.core.base import BaseSKMObject, ClassifierMixin
-from river.base import Classifier
-from river.drift import ADWIN
+from skmultiflow.drift_detection import ADWIN
+from skmultiflow.utils import get_dimensions
 
 
 ###### AdaptiveXGBoost ###################################################
 
 # not my implementation code taken from 
 # https://github.com/jacobmontiel/AdaptiveXGBoostClassifier
-class AdaptiveXGBoostClassifier(Classifier):
+class AdaptiveXGBoostClassifier(BaseSKMObject, ClassifierMixin):
     _PUSH_STRATEGY = 'push'
     _REPLACE_STRATEGY = 'replace'
     _UPDATE_STRATEGIES = [_PUSH_STRATEGY, _REPLACE_STRATEGY]
@@ -93,6 +93,7 @@ class AdaptiveXGBoostClassifier(Classifier):
                                                             self._UPDATE_STRATEGIES))
         self.update_strategy = update_strategy
         self._configure()
+        self._ensemble = [None] * n_estimators   # Initialize as an empty list or appropriate structure
 
     def _configure(self):
         if self.update_strategy == self._PUSH_STRATEGY:
@@ -253,11 +254,21 @@ class AdaptiveXGBoostClassifier(Classifier):
         return np.zeros(get_dimensions(X)[0])
 
     def predict_proba(self, X):
-        """
-        Not implemented for this method.
-        """
-        raise NotImplementedError("predict_proba is not implemented for this method.")
-
+        """Predict class probabilities for X."""
+        if self._ensemble:
+            d_test = xgb.DMatrix(X)
+            margins = np.zeros(X.shape[0])
+            for booster in self._ensemble:
+                if booster is not None:
+                    margins += booster.predict(d_test, output_margin=True)
+            # Normalize margins by the number of models to get the average score
+            if self.update_strategy == self._PUSH_STRATEGY:
+                margins /= len(self._ensemble)
+            probabilities = 1 / (1 + np.exp(-margins))
+            return np.vstack([1 - probabilities, probabilities]).T
+        # Return uniform probabilities if no models are available
+        return np.full((X.shape[0], 2), 0.5)
+    
 class AdaptiveStackedBoostClassifier():
     def __init__(self,
                  min_window_size=None, 

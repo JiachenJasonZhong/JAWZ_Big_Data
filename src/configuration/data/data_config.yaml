@@ -2,7 +2,7 @@
 
 # https://www.kaggle.com/ellipticco/elliptic-data-set
 elliptic_dataset:
-  folder: data/elliptic/
+  folder:  /Users/ariasarch/JAWZ_Big_Data/src/configuration/data/elliptic/
   classes_file: elliptic_txs_classes.csv
   edges_file: elliptic_txs_edgelist.csv
   feats_file: elliptic_txs_features.csv
@@ -10,13 +10,13 @@ elliptic_dataset:
 
 # https://github.com/sfarrugia15/Ethereum_Fraud_Detection/blob/master/Account_Stats/Complete.csv
 eth_accounts_dataset:
-  folder: data/eth_fraud/
+  folder: /Users/ariasarch/JAWZ_Big_Data/src/configuration/data/eth_fraud/
   accounts_file: eth_accounts.csv
 
 # http://users.rowan.edu/~polikar/res/nse/weather_data.zip
 noaa_weather_dataset:
   processed: false
-  folder: data/noaa_weather/
+  folder: /Users/ariasarch/JAWZ_Big_Data/src/configuration/data/noaa_weather/
   features_file: NEweather_data.csv
   classes_file: NEweather_class.csv
 

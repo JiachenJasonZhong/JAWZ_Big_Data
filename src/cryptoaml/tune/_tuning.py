@@ -18,7 +18,8 @@ from sklearn.metrics import get_scorer
 from sklearn.metrics import log_loss, make_scorer
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import StratifiedKFold
-from evolutionary_algorithm import EvolutionaryAlgorithm as ea # replacing from evolutionary_search import EvolutionaryAlgorithmSearchCV
+from evolutionary_search import EvolutionaryAlgorithmSearchCV
+# from evolutionary_algorithm import EvolutionaryAlgorithm as ea # replacing from evolutionary_search import EvolutionaryAlgorithmSearchCV
 
 import xgboost as xgb
 # import lightgbm as lgb
@@ -535,7 +536,7 @@ class EvolutionarySearchTuner(_BaseTuner):
             verbose=verbose
         )
         self._tuner_name = TUNE_EVOLUTIONARY_SEARCH
-        self._tuner = ea(estimator=estimator,
+        self._tuner = EvolutionaryAlgorithmSearchCV(estimator=estimator,
                                                     params=param_grid,
                                                     scoring=scoring,
                                                     cv=StratifiedKFold(n_splits=k_folds),

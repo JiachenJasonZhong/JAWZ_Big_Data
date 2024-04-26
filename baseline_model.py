@@ -15,17 +15,15 @@ from skmultiflow.trees import HoeffdingTree
 print("Step 2 passed")
 
 from sklearn.exceptions import UndefinedMetricWarning
-from sklearn.metrics import f1_score
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import recall_score
-from sklearn.metrics import precision_score
-from sklearn.metrics import confusion_matrix
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
+                             confusion_matrix, roc_auc_score, average_precision_score,
+                             classification_report, matthews_corrcoef)
 
 print("All critical packages are compatible.")
 
 import sys
-sys.path.append('/Users/ariasarch/aml-crypto-graph/src/')
+sys.path.append('/Users/ariasarch/JAWZ_Big_Data/src')
 
 import cryptoaml.datareader as cdr
 
@@ -48,17 +46,54 @@ def warn(*args, **kwargs):
 import warnings
 warnings.warn = warn
 
-print('packages succesfully loaded')
+print('All packages succesfully loaded')
 
-def evaluate_batch_incremental(model, data, t_eval=35):
+def compute_metrics(y_true, y_pred, y_probs=None):
+
+    # Confusion matrix components
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    
+    # Compute Labels
+    labels=np.unique(y_pred)
+
+    # Basic metrics
+    metrics_list = [
+        ("Accuracy", accuracy_score(y_true, y_pred)),
+        ("Precision", precision_score(y_true, y_pred, average='binary', labels=labels)),
+        ("Recall", recall_score(y_true, y_pred, average='binary', labels=labels)),
+        ("F1 Score", f1_score(y_true, y_pred, average='binary', labels=labels)),
+        ("Specificity", tn / (tn + fp) if (tn + fp) != 0 else 0),
+        ("NPV", tn / (tn + fn) if (tn + fn) != 0 else 0),
+        ("FPR", fp / (fp + tn) if (fp + tn) != 0 else 0),
+        ("FDR", fp / (fp + tp) if (fp + tp) != 0 else 0),
+        ("MCC", matthews_corrcoef(y_true, y_pred)),
+        ("Confusion Matrix", (tn, fp, fn, tp))
+    ]
+
+    # Additional metrics that require probability scores
+    if y_probs is not None:
+        metrics_list.append(("ROC AUC", roc_auc_score(y_true, y_probs)))
+        metrics_list.append(("AUCPR", average_precision_score(y_true, y_probs)))
+    
+    return metrics_list
+
+def evaluate_batch_incremental(model, data, t_eval=0):
     
     results = {}
     results_time = []
     true_test = []
     predictions_test = []
+    probabilities_test = []  # List to store probabilities for AUCPR calculation
     
-    for ts in np.arange(data["ts"].min(), data["ts"].max()):
-        
+    min_ts = data["ts"].min()
+    max_ts = data["ts"].max()
+    total_steps = max_ts - min_ts  # Calculate the total number of steps
+
+    # Loop through each timestep, except the last one since there's no following month to predict
+    for step, ts in enumerate(np.arange(min_ts, max_ts)):
+
+        print(f"Evaluating timestep {step + 1} of {total_steps}")  # Progress update
+
         # get training data for the current timestep 
         train_set = data[data["ts"] == ts]
         train_set_X = train_set.iloc[:,:-1]
@@ -69,51 +104,50 @@ def evaluate_batch_incremental(model, data, t_eval=35):
 
         # get test data for the current timestep + 1 
         test_set = data[data["ts"] == ts + 1]
-        test_set_X = test_set.iloc[:,:-1].values
-        test_set_y = test_set["class"].values
+        x_test = test_set.iloc[:,:-1].values
+        y_test = test_set["class"].values
     
         # predict test data for the current timestep + 1
-        y_pred = model.predict(test_set_X)
-        evaluation_f1 = f1_score(test_set_y, y_pred, average='binary', labels=np.unique(y_pred))
-        evaluation_recall = recall_score(test_set_y, y_pred, average='binary', labels=np.unique(y_pred))
-        evaluation_precision = precision_score(test_set_y, y_pred, average='binary', labels=np.unique(y_pred))
-        evaluation_accuracy = accuracy_score(test_set_y, y_pred, normalize=True)
+        y_pred = model.predict(x_test)
+
+        # Check if the model supports probability prediction and handle accordingly
+        if hasattr(model, "predict_proba"):
+            y_probs = model.predict_proba(x_test)[:, 1]  # Probabilities for the positive class
+        else:
+            y_probs = None  # For models that do not support predict_prob
+
+        # Computing metrics
+        metrics = compute_metrics(y_test, y_pred, y_probs)
+        for metric_name, metric_value in metrics:
+            print(f"{metric_name}: {metric_value}")
         
-        # take note of predictions after timestep 34 (evaluation set)
-        if ts+1 >= t_eval:
-            true_test.append(test_set_y)
-            predictions_test.append(y_pred)
-            label_count = test_set["class"].value_counts()
-            results_time.append({"timestep": ts + 1, 
-                                 "score":evaluation_f1, 
-                                 "total_pos_label": label_count.tolist()[1]}) 
+        true_test.append(y_test)
+        predictions_test.append(y_pred)
 
-            
-    test_results = {}
-    f1_score_test = f1_score(np.concatenate(true_test, axis=0), 
-                        np.concatenate(predictions_test, axis=0), 
-                        average='binary')
-    recall_score_test = recall_score(np.concatenate(true_test, axis=0),   
-                                np.concatenate(predictions_test, axis=0), 
-                                average='binary')
-    precision_score_test = precision_score(np.concatenate(true_test, axis=0),   
-                                      np.concatenate(predictions_test, axis=0), 
-                                      average='binary')
-    accuracy_score_test = accuracy_score(np.concatenate(true_test, axis=0),   
-                                    np.concatenate(predictions_test, axis=0), 
-                                    normalize=True)
-    confusion_matrix_test = confusion_matrix(np.concatenate(true_test, axis=0), 
-                                             np.concatenate(predictions_test, axis=0))
-    
-    test_results["f1"] = round(f1_score_test, 3)   
-    test_results["recall"] = round(recall_score_test, 3)   
-    test_results["precision"] = round(precision_score_test, 3)   
-    test_results["accuracy"] = round(accuracy_score_test, 3)   
-    test_results["confusion_matrix"] = confusion_matrix_test  
-    
-    results["test_results"] = test_results
-    results["time_metrics"] = pd.DataFrame(results_time)   
+        # Collect label counts if necessary; consider a default if the class label does not exist
+        label_counts = test_set["class"].value_counts().to_dict()
+        pos_label_count = label_counts.get(1, 0)  # Default to 0 if the positive class label '1' does not exist
 
+        results_time.append({
+            "timestep": ts + 1,
+            "metrics": metrics,
+            "total_pos_label": pos_label_count
+        })
+     
+    # Aggregate results
+    y_true_aggregated = np.concatenate(true_test, axis=0)
+    y_pred_aggregated = np.concatenate(predictions_test, axis=0)
+    y_probs_aggregated = np.concatenate(probabilities_test, axis=0) if probabilities_test else None
+
+    # Calculate aggregate metrics
+    # Use the compute_metrics function for aggregated metrics
+    aggregated_metrics = compute_metrics(y_true_aggregated, y_pred_aggregated, y_probs_aggregated)
+
+    results["test_results"] = aggregated_metrics  # Store the computed metrics
+
+    # Store the metrics to a pandas df
+    results["time_metrics"] = pd.DataFrame(results_time)
+    print(results)
     return results
 
 def evaluate(feature_set, n_eval):
@@ -165,22 +199,31 @@ def evaluate(feature_set, n_eval):
                                       detect_drift=detect_drift)
     experiment_3_results["AXGBr"][f_set] = evaluate_batch_incremental(AXGBr, data_eval, n_eval)
 
-    print("Evaluating AXGBp")
-    AXGBp = AdaptiveXGBoostClassifier(update_strategy='push',
-                                      n_estimators=n_estimators,
-                                      learning_rate=learning_rate,
-                                      max_depth=max_depth,
-                                      max_window_size=max_window_size,
-                                      min_window_size=min_window_size,
-                                      detect_drift=detect_drift)
-    experiment_3_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval, n_eval)
+    # print("Evaluating AXGBp")
+    # AXGBp = AdaptiveXGBoostClassifier(update_strategy='push',
+    #                                   n_estimators=n_estimators,
+    #                                   learning_rate=learning_rate,
+    #                                   max_depth=max_depth,
+    #                                   max_window_size=max_window_size,
+    #                                   min_window_size=min_window_size,
+    #                                   detect_drift=detect_drift)
+    # experiment_3_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval, n_eval)
 
     # 4. Proposed Method
     print("Evaluating ASXGB")
     ASXGB = AdaptiveStackedBoostClassifier()
     experiment_3_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval, n_eval)
     
-    elliptic_time_indexed_results(experiment_3_results)
-    print(experiment_3_results)
+    # elliptic_time_indexed_results(experiment_3_results)
+    # print(experiment_3_results)
 
-# evaluate("AF", 35)
+    # After all evaluations are done, save each model's results:
+    for model_key, model_results in experiment_3_results.items():
+        for feature_key, results in model_results.items():
+            if "time_metrics" in results:
+                results_filename = f"{model_key}_{feature_key}_results.csv"
+                results["time_metrics"].to_csv(results_filename, index=False)
+                print(f"Results saved to {results_filename}")
+
+
+evaluate("AF", 35)

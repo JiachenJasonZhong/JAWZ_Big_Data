@@ -14,8 +14,9 @@ from ._noaa_dr import Weather_Dataset
 from ._elliptic_dr import Elliptic_Dataset
 from ._eth_accounts_dr import Eth_Accounts_Dataset   
 
+
 ###### Datareader functions ###############################################
-def get_data(source, config_file="configuration/data/data_config.yaml", **kwargs):
+def get_data(source, config_file="src/configuration/data/data_config.yaml", **kwargs):
     
     # available sources 
     sources = ["elliptic", "eth_accounts", "noaa_weather"]

@@ -10,7 +10,7 @@ Follow these commands in your terminal to clone the repository and set up the en
 ```bash
 git clone git@github.com:JiachenJasonZhong/JAWZ_Big_Data.git
 conda install mamba -n base -c conda-forge
-mamba env create -f /path/to/CSE_project5.yaml  # Replace /path/to/ with your specific path
+mamba env create -f /path/to/CSE_project5.yaml # Replace /path/to/ with your specific path
 conda activate CSE_project5
 pip install sklearn-deap
 conda install scikit-learn=0.23.2
@@ -19,12 +19,9 @@ pip install -U scikit-multiflow
 
 ## Step 2: Modify the _data.py file 
 
-# Add the following to line 9 in _data:
+# Add your specific path to data_config.yaml in the /src/configuration/data/ directory:
 
-```python
-import sys
-sys.path.append('/path/to/aml-crypto-graph/src/')  # Replace /path/to/ with your specific path
-```
+For instance, where is says "folder:" in line 5, change that your full path. 
 
 ## Step 3: Download the data 
 
