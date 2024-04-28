@@ -19,7 +19,7 @@ pip install scikit-multiflow
 
 ## Step 2: Modify the _data.py file 
 
-# Add your specific path to data_config.yaml in the /src/configuration/data/ directory:
+Add your specific path to data_config.yaml in the /src/configuration/data/ directory:
 
 For instance, where is says "folder:" in line 5, change that your full path. 
 
