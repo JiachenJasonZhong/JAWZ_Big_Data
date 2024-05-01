@@ -19,25 +19,6 @@ def load_and_process_metrics(file_path):
     
     return data
 
-# Function to check and report significant differences
-def check_significance(data1, data2, data3, metric_names):
-    significant_results = {}
-    for metric in metric_names:
-        all_data = pd.concat([
-            pd.Series(data1[metric], name=metric),
-            pd.Series(data2[metric], name=metric),
-            pd.Series(data3[metric], name=metric)
-        ], axis=0).dropna()
-        groups = ['ASXGB'] * len(data1) + ['AXGBr'] * len(data2) + ['ARF'] * len(data3)
-        
-        f_val, p_val = stats.f_oneway(data1[metric].dropna(), data2[metric].dropna(), data3[metric].dropna())
-        
-        if p_val < 0.05:
-            tukey = pairwise_tukeyhsd(endog=all_data, groups=groups, alpha=0.05)
-            significant_results[metric] = tukey.summary()
-    
-    return significant_results
-
 # Function to count which model has the highest metrics 
 def count_highest_means(ASXGB, AXGBp, AXGBr, ARF, metric_names):
     # Initialize a dictionary to store the count of highest means for each dataset
@@ -83,9 +64,10 @@ data_AXGBp = load_and_process_metrics('/Users/ariasarch/JAWZ_Big_Data/AXGBp_elli
 data_AXGBr = load_and_process_metrics('/Users/ariasarch/JAWZ_Big_Data/AXGBr_elliptic_AF_results.csv')
 data_ARF = load_and_process_metrics('/Users/ariasarch/JAWZ_Big_Data/ARF_elliptic_AF_results.csv')
 
-# Plotting each metric as a bar graph, averaging over all timesteps
-fig, axs = plt.subplots(len(metric_names), 1, figsize=(10, 5 * len(metric_names)))  # Adjust subplot size as needed
-for i, metric in enumerate(metric_names):
+# Plotting each metric as a separate figure
+for metric in metric_names:
+    fig, ax = plt.subplots(figsize=(8, 5))  # Adjust figure size as needed
+
     # Calculate average and standard error of metrics for each model
     avg_ASXGB = data_ASXGB[metric].mean()
     se_ASXGB = data_ASXGB[metric].sem()
@@ -97,26 +79,19 @@ for i, metric in enumerate(metric_names):
     se_ARF = data_ARF[metric].sem()
 
     # Bar plot with error bars
-    axs[i].bar('ASXGB', avg_ASXGB, yerr=se_ASXGB, color='skyblue', width=0.4, capsize=5)
-    axs[i].bar('AXGBp', avg_AXGBp, yerr=se_AXGBp, color='grey', width=0.4, capsize=5)
-    axs[i].bar('AXGBr', avg_AXGBr, yerr=se_AXGBr, color='lightgreen', width=0.4, capsize=5)
-    axs[i].bar('ARF', avg_ARF, yerr=se_ARF, color='salmon', width=0.4, capsize=5)
+    ax.bar('ASXGB', avg_ASXGB, yerr=se_ASXGB, color='skyblue', width=0.4, capsize=5, label='ASXGB')
+    ax.bar('AXGBp', avg_AXGBp, yerr=se_AXGBp, color='grey', width=0.4, capsize=5, label='AXGBp')
+    ax.bar('AXGBr', avg_AXGBr, yerr=se_AXGBr, color='lightgreen', width=0.4, capsize=5, label='AXGBr')
+    ax.bar('ARF', avg_ARF, yerr=se_ARF, color='salmon', width=0.4, capsize=5, label='ARF')
 
-    # # Scatter plot overlay for each model
-    # axs[i].scatter(['ASXGB'] * len(data_ASXGB), data_ASXGB[metric], color='darkblue', alpha=0.7)
-    # axs[i].scatter(['AXGBr'] * len(data_AXGBr), data_AXGBr[metric], color='darkgreen', alpha=0.7)
-    # axs[i].scatter(['ARF'] * len(data_ARF), data_ARF[metric], color='darkred', alpha=0.7)
+    ax.set_title(f"{metric} Comparison")
+    ax.set_ylabel('Metric Value')
 
-    axs[i].set_title(metric)
-    axs[i].set_ylabel('Metric Value')
+    plt.tight_layout()
+    plt.show()
 
 plt.tight_layout()
 plt.show()
-
-# Check and print significant results
-# results = check_significance(data_ASXGB, data_AXGBr, data_ARF, metric_names)
-# for metric, result in results.items():
-#     print(f"Significant Results for {metric}:\n{result}\n")
 
 # Call the function and store the result
 highest_means_count = count_highest_means(data_ASXGB, data_AXGBp, data_AXGBr, data_ARF, metric_names)
