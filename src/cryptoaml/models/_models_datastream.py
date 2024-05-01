@@ -93,7 +93,6 @@ class AdaptiveXGBoostClassifier(BaseSKMObject, ClassifierMixin):
                                                             self._UPDATE_STRATEGIES))
         self.update_strategy = update_strategy
         self._configure()
-        self._ensemble = [None] * n_estimators   # Initialize as an empty list or appropriate structure
 
     def _configure(self):
         if self.update_strategy == self._PUSH_STRATEGY:
@@ -206,9 +205,14 @@ class AdaptiveXGBoostClassifier(BaseSKMObject, ClassifierMixin):
         d_mini_batch_train = xgb.DMatrix(X, y.astype(int))
         # Get margins from trees in the ensemble
         margins = np.asarray([self._init_margin] * d_mini_batch_train.num_row())
+        # Add logging to check if any model is None
         for j in range(last_model_idx):
-            margins = np.add(margins,
-                             self._ensemble[j].predict(d_mini_batch_train, output_margin=True))
+            if self._ensemble[j] is None:
+                print(f"Model at index {j} is None")  # You can replace print with logging.error if you use logging
+            else:
+                margins = np.add(margins,
+                                self._ensemble[j].predict(d_mini_batch_train, output_margin=True))
+    
         d_mini_batch_train.set_base_margin(margin=margins)
         booster = xgb.train(params=self._boosting_params,
                             dtrain=d_mini_batch_train,
@@ -266,9 +270,13 @@ class AdaptiveXGBoostClassifier(BaseSKMObject, ClassifierMixin):
                 margins /= len(self._ensemble)
             probabilities = 1 / (1 + np.exp(-margins))
             return np.vstack([1 - probabilities, probabilities]).T
-        # Return uniform probabilities if no models are available
-        return np.full((X.shape[0], 2), 0.5)
-    
+        # Return no models are available
+        return print('no models are available')
+
+
+
+
+
 class AdaptiveStackedBoostClassifier():
     def __init__(self,
                  min_window_size=None, 
@@ -470,3 +478,18 @@ class AdaptiveStackedBoostClassifier():
             meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))                    
         meta_features = self._construct_meta_features(meta_features)
         return self._meta_learner.predict(meta_features)
+    
+    def eval_proba(self, X):
+        
+        # only one model in ensemble use its predictions 
+        base_models_len = self._n_base_models - self._base_models[0].count(None)
+        if base_models_len == 0:
+            raise Exception("No base models have been trained.")
+
+        meta_features = []
+        for b_idx in range(base_models_len):
+            y_predicted = self._base_models[0][b_idx].predict_proba(X)
+            meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))
+        
+        meta_features = self._construct_meta_features(meta_features)
+        return self._meta_learner.predict_proba(meta_features)
