@@ -41,6 +41,10 @@ from cryptoaml.models import AdaptiveStackedBoostClassifier
 
 print('cryptoaml.models AdaptiveStackedBoostClassifier succesfully loaded')
 
+from cryptoaml.models import LSTM_AdaptiveStackedBoostClassifier
+
+print('cryptoaml.models LSTM_AdaptiveStackedBoostClassifier succesfully loaded')
+
 def warn(*args, **kwargs):
     pass
 import warnings
@@ -110,7 +114,7 @@ def evaluate_batch_incremental(model, data, t_eval=0):
         # Check if the model has the 'predict_proba' method
         if hasattr(model, 'predict_proba'):
             y_probs = model.predict_proba(x_test)[:, 1]  # Probabilities for the positive class
-            # Assuming y_probs is the array containing your model's probability outputs
+            # Assuming y_probs is the array containing the model's probability outputs
             valid_probs = y_probs[np.isfinite(y_probs)]  # Filter out NaN and infinite values
 
             if len(valid_probs) > 0:
@@ -130,8 +134,17 @@ def evaluate_batch_incremental(model, data, t_eval=0):
             if np.any(np.isinf(y_probs)):
                 print("Inf values found")
         else:
-            y_probs = model.eval_proba(x_test)[:, 1]  # Probabilities for the positive class
-            # Assuming y_probs is the array containing your model's probability outputs
+            y_probs = model.eval_proba(x_test)  # Probabilities for the positive class
+
+            # Check the shape of y_probs
+            if y_probs.ndim == 2:
+                # If y_probs is a 2-dimensional array, assume it contains probabilities for both classes
+                y_probs = y_probs[:, 1]  # Select the probabilities for the positive class
+            else:
+                # If y_probs is a 1-dimensional array, assume it contains probabilities for the positive class
+                pass  # No need to modify y_probs
+
+            # Assuming y_probs is the array containing the model's probability outputs
             valid_probs = y_probs[np.isfinite(y_probs)]  # Filter out NaN and infinite values
 
             if len(valid_probs) > 0:
@@ -208,15 +221,17 @@ def evaluate(feature_set, n_eval):
     experiment_3_results["AXGBr"] = {}
     experiment_3_results["AXGBp"] = {}
     experiment_3_results["ASXGB"] = {}
+    experiment_3_results["LSTM_ASXGB"] = {}
     experiment_3_results["ARF"][f_set] = {}
     experiment_3_results["AXGBr"][f_set] = {}
     experiment_3_results["AXGBp"][f_set] = {}
     experiment_3_results["ASXGB"][f_set] = {}
+    experiment_3_results["LSTM_ASXGB"][f_set] = {}
 
-    # 2. Adapative Random Forest
-    print("Evaluating ARF")
-    arf = AdaptiveRandomForest(performance_metric="kappa")
-    experiment_3_results["ARF"][f_set] = evaluate_batch_incremental(arf, data_eval, n_eval)
+    # # 2. Adapative Random Forest
+    # print("Evaluating ARF")
+    # arf = AdaptiveRandomForest(performance_metric="kappa")
+    # experiment_3_results["ARF"][f_set] = evaluate_batch_incremental(arf, data_eval, n_eval)
     
     # 2. Adapative Extreme Gradient Boosting with Replacement
     # 3. Adapative Extreme Gradient Boosting with Push
@@ -228,30 +243,35 @@ def evaluate(feature_set, n_eval):
     min_window_size = 1     # set to activate the dynamic window strategy
     detect_drift = False    # Enable/disable drift detection
 
-    print("Evaluating AXGBr")
-    AXGBr = AdaptiveXGBoostClassifier(update_strategy='replace',
-                                      n_estimators=n_estimators,
-                                      learning_rate=learning_rate,
-                                      max_depth=max_depth,
-                                      max_window_size=max_window_size,
-                                      min_window_size=min_window_size,
-                                      detect_drift=detect_drift)
-    experiment_3_results["AXGBr"][f_set] = evaluate_batch_incremental(AXGBr, data_eval, n_eval)
+    # print("Evaluating AXGBr")
+    # AXGBr = AdaptiveXGBoostClassifier(update_strategy='replace',
+    #                                   n_estimators=n_estimators,
+    #                                   learning_rate=learning_rate,
+    #                                   max_depth=max_depth,
+    #                                   max_window_size=max_window_size,
+    #                                   min_window_size=min_window_size,
+    #                                   detect_drift=detect_drift)
+    # experiment_3_results["AXGBr"][f_set] = evaluate_batch_incremental(AXGBr, data_eval, n_eval)
 
-    print("Evaluating AXGBp")
-    AXGBp = AdaptiveXGBoostClassifier(update_strategy='push',
-                                      n_estimators=n_estimators,
-                                      learning_rate=learning_rate,
-                                      max_depth=max_depth,
-                                      max_window_size=max_window_size,
-                                      min_window_size=min_window_size,
-                                      detect_drift=detect_drift)
-    experiment_3_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval, n_eval)
+    # print("Evaluating AXGBp")
+    # AXGBp = AdaptiveXGBoostClassifier(update_strategy='push',
+    #                                   n_estimators=n_estimators,
+    #                                   learning_rate=learning_rate,
+    #                                   max_depth=max_depth,
+    #                                   max_window_size=max_window_size,
+    #                                   min_window_size=min_window_size,
+    #                                   detect_drift=detect_drift)
+    # experiment_3_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval, n_eval)
+
+    # # 4. Proposed Method by the original authors
+    # print("Evaluating ASXGB")
+    # ASXGB = AdaptiveStackedBoostClassifier()
+    # experiment_3_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval, n_eval)
 
     # 4. Proposed Method
-    print("Evaluating ASXGB")
-    ASXGB = AdaptiveStackedBoostClassifier()
-    experiment_3_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval, n_eval)
+    print("Evaluating LSTM + ASXGB")
+    LSTM_ASXGB = LSTM_AdaptiveStackedBoostClassifier()
+    experiment_3_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval, n_eval)
     
     # elliptic_time_indexed_results(experiment_3_results)
     # print(experiment_3_results)

@@ -33,7 +33,6 @@ MODEL_XGB    = "xg_boost"
 MODEL_XGB_RF = "xg_boost_rf"
 MODEL_LIGHT  = "light_boost"
 MODEL_CAT    = "cat_boost"
-
 PERSIST_SAVE = "save"
 PERSIST_LOAD = "load"
 

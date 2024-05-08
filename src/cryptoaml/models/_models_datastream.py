@@ -5,7 +5,6 @@
 import numpy as np
 import xgboost as xgb
 from collections import Counter
-
 from skmultiflow.core.base import BaseSKMObject, ClassifierMixin
 from skmultiflow.drift_detection import ADWIN
 from skmultiflow.utils import get_dimensions
@@ -273,9 +272,42 @@ class AdaptiveXGBoostClassifier(BaseSKMObject, ClassifierMixin):
         # Return no models are available
         return print('no models are available')
 
+class SimpleLSTM:
+    def __init__(self, input_dim, hidden_dim):
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.weights_ih = np.random.rand(4 * hidden_dim, input_dim + hidden_dim) * 0.1
+        self.weights_ho = np.random.rand(hidden_dim) * 0.1
+        self.bias = np.zeros(4 * hidden_dim)
 
+    def step(self, x, h, c):
+        combined = np.hstack((h, x))
+        gates = np.dot(self.weights_ih, combined) + self.bias
+        i, f, o, g = np.split(gates, 4)
+        i = self.sigmoid(i)
+        f = self.sigmoid(f)
+        o = self.sigmoid(o)
+        g = np.tanh(g)
+        c = f * c + i * g
+        h = o * np.tanh(c)
+        return h, c
 
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
 
+    def forward(self, inputs):
+        if inputs.ndim == 1:
+            inputs = inputs.reshape(1, -1)
+
+        h = np.zeros(self.hidden_dim)
+        c = np.zeros(self.hidden_dim)
+        outputs = []
+
+        for x in inputs:
+            h, c = self.step(x, h, c)
+            outputs.append(h)
+
+        return np.array(outputs), h, c
 
 class AdaptiveStackedBoostClassifier():
     def __init__(self,
@@ -493,3 +525,250 @@ class AdaptiveStackedBoostClassifier():
         
         meta_features = self._construct_meta_features(meta_features)
         return self._meta_learner.predict_proba(meta_features)
+
+class LSTM_AdaptiveStackedBoostClassifier():
+    def __init__(self,
+                 min_window_size=None, 
+                 max_window_size=2000,
+                 n_base_models=5,
+                 n_rounds_eval_base_model=3,
+                 meta_learner_train_ratio=0.4,
+                 lstm_units=64,
+                 lstm_dropout=0.2,
+                 lstm_epochs=10):
+        
+        self.lstm = SimpleLSTM(input_dim=n_base_models * 2, hidden_dim=lstm_units)
+        self.lstm_units = lstm_units
+        self.lstm_dropout = lstm_dropout
+        self.lstm_epochs = lstm_epochs
+        self._lstm_model = None
+        self._first_run = True
+        self.max_window_size = max_window_size
+        self.min_window_size = min_window_size
+        
+        # validate 'n_base_models' 
+        if n_base_models <= 1:
+            raise ValueError("'n_base_models' must be > 1")
+        self._n_base_models = n_base_models
+        # validate 'n_rounds_eval_base_model' 
+        if n_rounds_eval_base_model > n_base_models or n_rounds_eval_base_model <= 0:
+            raise ValueError("'n_rounds_eval_base_model' must be > 0 and <= to 'n_base_models'")
+        self._n_rounds_eval_base_model = n_rounds_eval_base_model
+        self._meta_learner = xgb.XGBClassifier(n_jobs=-1)
+        self.meta_learner_train_ratio = meta_learner_train_ratio
+        self._X_buffer = np.array([])
+        self._y_buffer = np.array([])
+
+        # 3*N matrix 
+        # 1st row - base-level model
+        # 2nd row - evaluation rounds 
+        self._base_models = [[None for x in range(n_base_models)] for y in range(3)]
+        
+        self._reset_window_size()
+
+    def _adjust_window_size(self):
+        if self._dynamic_window_size < self.max_window_size:
+            self._dynamic_window_size *= 2
+            if self._dynamic_window_size > self.max_window_size:
+                self.window_size = self.max_window_size
+            else:
+                self._window_size = self._dynamic_window_size
+
+    def _reset_window_size(self):
+        if self.min_window_size:
+            self._dynamic_window_size = self.min_window_size
+        else:
+            self._dynamic_window_size = self.max_window_size
+        self._window_size = self._dynamic_window_size
+
+        
+    def partial_fit(self, X, y):
+        if self._first_run:
+            self._X_buffer = np.array([]).reshape(0, X.shape[1])
+            self._y_buffer = np.array([])
+            self._first_run = False
+                           
+        self._X_buffer = np.concatenate((self._X_buffer, X))
+        self._y_buffer = np.concatenate((self._y_buffer, y))
+        while self._X_buffer.shape[0] >= self._window_size:
+            self._train_on_mini_batch(X=self._X_buffer[0:self._window_size, :],
+                                      y=self._y_buffer[0:self._window_size])
+            delete_idx = [i for i in range(self._window_size)]
+            self._X_buffer = np.delete(self._X_buffer, delete_idx, axis=0)
+            self._y_buffer = np.delete(self._y_buffer, delete_idx, axis=0)
+    
+    def _train_new_base_model(self, X_base, y_base, X_meta, y_meta):
+        
+        # new base-level model  
+        new_base_model = xgb.XGBClassifier(n_jobs=-1)
+        # first train the base model on the base-level training set 
+        new_base_model.fit(X_base, y_base)
+        # then extract the predicted probabilities to be added as meta-level features
+        y_predicted = new_base_model.predict_proba(X_meta)   
+        # once the meta-features for this specific base-model are extracted,
+        # we incrementally fit this base-model to the rest of the data,
+        # this is done so this base-model is trained on a full batch 
+        new_base_model.fit(X_meta, y_meta, xgb_model=new_base_model.get_booster())
+        return new_base_model, y_predicted
+    
+    def _construct_meta_features(self, meta_features):
+        
+        # get size of of meta-features
+        meta_features_shape = meta_features.shape[1]  
+        # get expected number of features,
+        # binary probabilities from the total number of base-level models
+        meta_features_expected = self._n_base_models * 2
+        
+        # since the base-level models list is not full, 
+        # we need to fill the features until the list is full, 
+        # so we set the remaining expected meta-features as 0
+        if meta_features_shape < meta_features_expected:
+            diff = meta_features_expected - meta_features_shape
+            empty_features = np.zeros((meta_features.shape[0], diff))
+            meta_features = np.hstack((meta_features, empty_features)) 
+        return meta_features 
+        
+    def _get_weakest_base_learner(self):
+        
+        # loop rounds
+        worst_model_idx = None 
+        worst_performance = 1
+        for idx in range(len(self._base_models[0])):
+            current_round = self._base_models[1][idx]
+            if current_round < self._n_rounds_eval_base_model:
+                continue 
+            
+            current_performance = self._base_models[2][idx].sum()
+            if current_performance < worst_performance:
+                worst_performance = current_performance 
+                worst_model_idx = idx
+
+        return worst_model_idx
+    
+    def _train_on_mini_batch(self, X, y):
+        
+        # ----------------------------------------------------------------------------
+        # STEP 1: split mini batch to base-level and meta-level training set
+        # ----------------------------------------------------------------------------
+        base_idx = int(self._window_size * (1.0 - self.meta_learner_train_ratio))
+        X_base = X[0: base_idx, :]
+        y_base = y[0: base_idx] 
+
+        # this part will be used to train the meta-level model,
+        # and to continue training the base-level models on the rest of this batch
+        X_meta = X[base_idx:self._window_size, :]  
+        y_meta = y[base_idx:self._window_size]
+        
+        # ----------------------------------------------------------------------------
+        # STEP 2: train previous base-models 
+        # ----------------------------------------------------------------------------
+        meta_features = []
+        base_models_len = self._n_base_models - self._base_models[0].count(None)
+        if base_models_len > 0: # check if we have any base-level models         
+            base_model_performances = self._meta_learner.feature_importances_
+            for b_idx in range(base_models_len): # loop and train and extract meta-level features 
+                    
+                # continuation of training (incremental) on base-level model,
+                # using the base-level training set 
+                base_model = self._base_models[0][b_idx]
+                base_model.fit(X_base, y_base, xgb_model=base_model.get_booster())
+                y_predicted = base_model.predict_proba(X_meta) # extract meta-level features 
+                                
+                # extract meta-features 
+                meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))                    
+                
+                # once the meta-features for this specific base-model are extracted,
+                # we incrementally fit this base-model to the rest of the data,
+                # this is done so this base-model is trained on a full batch 
+                base_model.fit(X_meta, y_meta, xgb_model=base_model.get_booster())
+                                
+                # update base-level model list 
+                self._base_models[0][b_idx] = base_model
+                current_round = self._base_models[1][b_idx]
+                last_performance = base_model_performances[b_idx * 2] + base_model_performances[(b_idx*2)+1] 
+                self._base_models[2][b_idx][current_round%self._n_rounds_eval_base_model] = last_performance
+                self._base_models[1][b_idx] = current_round + 1
+                
+        # ----------------------------------------------------------------------------
+        # STEP 3: with each new batch, we create/train a new base model 
+        # ----------------------------------------------------------------------------
+        new_base_model, new_base_model_meta_features = self._train_new_base_model(X_base, y_base, X_meta, y_meta)
+
+        insert_idx = base_models_len
+        if base_models_len == 0:
+            meta_features = new_base_model_meta_features
+        elif base_models_len > 0 and base_models_len < self._n_base_models: 
+            meta_features = np.hstack((meta_features, new_base_model_meta_features))     
+        else: 
+            insert_idx = self._get_weakest_base_learner()           
+            meta_features[:, insert_idx * 2] = new_base_model_meta_features[:,0]
+            meta_features[:, (insert_idx * 2) + 1] = new_base_model_meta_features[:,1]
+            
+        self._base_models[0][insert_idx] = new_base_model 
+        self._base_models[1][insert_idx] = 0 
+        self._base_models[2][insert_idx] = np.zeros(self._n_rounds_eval_base_model) 
+
+        # STEP 4: train the meta-level model 
+        meta_features = self._construct_meta_features(meta_features)
+        
+        if base_models_len == 0:
+            self._meta_learner.fit(meta_features, y_meta)
+        else:
+            self._meta_learner.fit(meta_features, y_meta, xgb_model=self._meta_learner.get_booster())
+
+        # STEP 5: train the LSTM model
+        if self._lstm_model is None:
+            self._lstm_model = self.lstm
+
+        self._lstm_model.forward(meta_features.reshape((-1, meta_features.shape[1])))
+
+    def predict(self, X):
+
+        # only one model in ensemble use its predictions 
+        base_models_len = self._n_base_models - self._base_models[0].count(None)
+        if base_models_len < self._n_base_models:
+            predictions = []
+            for i in range(base_models_len):
+                tmp_predictions = self._base_models[0][i].predict(X)
+                predictions.append(tmp_predictions)
+            output = np.array([int(Counter(col).most_common(1)[0][0]) for col in zip(*predictions)])
+            return output
+        
+        # predict via meta learner 
+        meta_features = []           
+        for b_idx in range(base_models_len):
+            y_predicted = self._base_models[0][b_idx].predict_proba(X) 
+            meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))                    
+        meta_features = self._construct_meta_features(meta_features)
+
+        # predict using the LSTM model
+        lstm_outputs, _, _ = self._lstm_model.forward(meta_features.reshape((-1, meta_features.shape[1])))
+        lstm_predictions = lstm_outputs[:, -1] 
+
+        if np.isscalar(lstm_predictions):
+            print('np value is a scalar value!')
+            print(lstm_predictions)
+            return np.full(X.shape[0], (lstm_predictions > 0.5).astype(int))
+        else:
+            return (lstm_predictions > 0.5).astype(int)
+        # return self._meta_learner.predict(meta_features)
+    
+    def eval_proba(self, X):
+        
+        # only one model in ensemble use its predictions 
+        base_models_len = self._n_base_models - self._base_models[0].count(None)
+        if base_models_len == 0:
+            raise Exception("No base models have been trained.")
+
+        meta_features = []
+        for b_idx in range(base_models_len):
+            y_predicted = self._base_models[0][b_idx].predict_proba(X)
+            meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))
+        
+        meta_features = self._construct_meta_features(meta_features)
+        # predict probabilities using the LSTM model
+        lstm_outputs, _, _ = self._lstm_model.forward(meta_features.reshape((-1, meta_features.shape[1])))
+        lstm_predictions = np.dot(lstm_outputs, self._lstm_model.weights_ho)
+        probabilities = 1 / (1 + np.exp(-lstm_predictions))
+        return probabilities
+        # return self._meta_learner.predict_proba(meta_features)

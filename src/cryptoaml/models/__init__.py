@@ -12,9 +12,10 @@ from ._models import LightGbmAlgo
 from ._models import CatBoostAlgo 
 from ._models_datastream import AdaptiveXGBoostClassifier 
 from ._models_datastream import AdaptiveStackedBoostClassifier 
+from ._models_datastream import LSTM_AdaptiveStackedBoostClassifier 
 
 ###### exposed functionality ##############################################
-__all__ = ["RandomForestAlgo",  "XgboostAlgo", "XgboostRfAlgo", "LightGbmAlgo",  "CatBoostAlgo", "AdaptiveStackedBoostClassifier","AdaptiveXGBoostClassifier"]
+__all__ = ["RandomForestAlgo",  "XgboostAlgo", "XgboostRfAlgo", "LightGbmAlgo",  "CatBoostAlgo", "AdaptiveStackedBoostClassifier","AdaptiveXGBoostClassifier","LSTM_AdaptiveStackedBoostClassifier"]
 ###########################################################################
 
     
