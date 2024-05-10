@@ -1,7 +1,9 @@
+import sys
 import numpy as np
 import pandas as pd
 import xgboost as xgb
 from collections import Counter
+sys.path.append('/Users/ariasarch/JAWZ_Big_Data/src')
 
 print("Step 1 passed")
 
@@ -22,35 +24,17 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_s
 
 print("All critical packages are compatible.")
 
-import sys
-sys.path.append('/Users/ariasarch/JAWZ_Big_Data/src')
-
 import cryptoaml.datareader as cdr
-
-print('cryptoaml.datareader succesfully loaded')
-
 from cryptoaml.metrics import elliptic_time_indexed_results
-
-print('cryptoaml.metrics succesfully loaded')
-
-from cryptoaml.models import AdaptiveXGBoostClassifier
-
-print('cryptoaml.models AdaptiveXGBoostClassifier succesfully loaded')
-
-from cryptoaml.models import AdaptiveStackedBoostClassifier
-
-print('cryptoaml.models AdaptiveStackedBoostClassifier succesfully loaded')
-
-from cryptoaml.models import LSTM_AdaptiveStackedBoostClassifier
-
-print('cryptoaml.models LSTM_AdaptiveStackedBoostClassifier succesfully loaded')
+from cryptoaml.models import (AdaptiveXGBoostClassifier, AdaptiveStackedBoostClassifier, 
+                              Simple_LSTM_AdaptiveStackedBoostClassifier, LSTM_AdaptiveStackedBoostClassifier)
 
 def warn(*args, **kwargs):
     pass
 import warnings
 warnings.warn = warn
 
-print('All packages succesfully loaded')
+print('Step 3 passed - All packages succesfully loaded')
 
 def compute_metrics(y_true, y_pred, y_probs):
 
@@ -216,22 +200,24 @@ def evaluate(feature_set, n_eval):
     data_eval = train_data.append(test_data, ignore_index=True)
     
     f_set = "elliptic"+"_"+feature_set
-    experiment_3_results = {}
-    experiment_3_results["ARF"] = {}
-    experiment_3_results["AXGBr"] = {}
-    experiment_3_results["AXGBp"] = {}
-    experiment_3_results["ASXGB"] = {}
-    experiment_3_results["LSTM_ASXGB"] = {}
-    experiment_3_results["ARF"][f_set] = {}
-    experiment_3_results["AXGBr"][f_set] = {}
-    experiment_3_results["AXGBp"][f_set] = {}
-    experiment_3_results["ASXGB"][f_set] = {}
-    experiment_3_results["LSTM_ASXGB"][f_set] = {}
+    experiment_results = {}
+    experiment_results["ARF"] = {}
+    experiment_results["AXGBr"] = {}
+    experiment_results["AXGBp"] = {}
+    experiment_results["ASXGB"] = {}
+    experiment_results["Simple_LSTM_ASXGB"] = {}
+    experiment_results["LSTM_ASXGB"] = {}
+    experiment_results["ARF"][f_set] = {}
+    experiment_results["AXGBr"][f_set] = {}
+    experiment_results["AXGBp"][f_set] = {}
+    experiment_results["ASXGB"][f_set] = {}
+    experiment_results["Simple_LSTM_ASXGB"][f_set] = {}
+    experiment_results["LSTM_ASXGB"][f_set] = {}
 
     # # 2. Adapative Random Forest
     # print("Evaluating ARF")
     # arf = AdaptiveRandomForest(performance_metric="kappa")
-    # experiment_3_results["ARF"][f_set] = evaluate_batch_incremental(arf, data_eval, n_eval)
+    # experiment_results["ARF"][f_set] = evaluate_batch_incremental(arf, data_eval, n_eval)
     
     # 2. Adapative Extreme Gradient Boosting with Replacement
     # 3. Adapative Extreme Gradient Boosting with Push
@@ -251,7 +237,7 @@ def evaluate(feature_set, n_eval):
     #                                   max_window_size=max_window_size,
     #                                   min_window_size=min_window_size,
     #                                   detect_drift=detect_drift)
-    # experiment_3_results["AXGBr"][f_set] = evaluate_batch_incremental(AXGBr, data_eval, n_eval)
+    # experiment_results["AXGBr"][f_set] = evaluate_batch_incremental(AXGBr, data_eval, n_eval)
 
     # print("Evaluating AXGBp")
     # AXGBp = AdaptiveXGBoostClassifier(update_strategy='push',
@@ -261,23 +247,28 @@ def evaluate(feature_set, n_eval):
     #                                   max_window_size=max_window_size,
     #                                   min_window_size=min_window_size,
     #                                   detect_drift=detect_drift)
-    # experiment_3_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval, n_eval)
+    # experiment_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval, n_eval)
 
-    # # 4. Proposed Method by the original authors
-    # print("Evaluating ASXGB")
-    # ASXGB = AdaptiveStackedBoostClassifier()
-    # experiment_3_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval, n_eval)
+    # 4. Proposed Method by the original authors
+    print("Evaluating ASXGB")
+    ASXGB = AdaptiveStackedBoostClassifier()
+    experiment_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval, n_eval)
 
-    # 4. Proposed Method
+    # 4. Simple LSTM Method
+    print("Evaluating Simple_LSTM + ASXGB")
+    LSTM_ASXGB = Simple_LSTM_AdaptiveStackedBoostClassifier()
+    experiment_results["Simple_LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval, n_eval)
+    
+    # 5. LSTM Method
     print("Evaluating LSTM + ASXGB")
     LSTM_ASXGB = LSTM_AdaptiveStackedBoostClassifier()
-    experiment_3_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval, n_eval)
-    
-    # elliptic_time_indexed_results(experiment_3_results)
-    # print(experiment_3_results)
+    experiment_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval, n_eval)
+
+    # elliptic_time_indexed_results(experiment_results)
+    # print(experiment_results)
 
     # After all evaluations are done, save each model's results:
-    for model_key, model_results in experiment_3_results.items():
+    for model_key, model_results in experiment_results.items():
         for feature_key, results in model_results.items():
             if "time_metrics" in results:
                 results_filename = f"{model_key}_{feature_key}_results.csv"
