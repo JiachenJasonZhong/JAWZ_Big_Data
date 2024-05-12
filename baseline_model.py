@@ -34,7 +34,7 @@ def warn(*args, **kwargs):
 import warnings
 warnings.warn = warn
 
-print('Step 3 passed - All packages succesfully loaded')
+print('Step 3 passed - All packages succesfully loaded')    
 
 def compute_metrics(y_true, y_pred, y_probs):
 
@@ -249,20 +249,20 @@ def evaluate(feature_set, n_eval):
     #                                   detect_drift=detect_drift)
     # experiment_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval, n_eval)
 
-    # 4. Proposed Method by the original authors
-    print("Evaluating ASXGB")
-    ASXGB = AdaptiveStackedBoostClassifier()
-    experiment_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval, n_eval)
+    # # 4. Proposed Method by the original authors
+    # print("Evaluating ASXGB")
+    # ASXGB = AdaptiveStackedBoostClassifier()
+    # experiment_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval, n_eval)
 
-    # 4. Simple LSTM Method
+    # 5. Simple LSTM Method
     print("Evaluating Simple_LSTM + ASXGB")
-    LSTM_ASXGB = Simple_LSTM_AdaptiveStackedBoostClassifier()
-    experiment_results["Simple_LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval, n_eval)
+    Simple_LSTM_ASXGB = Simple_LSTM_AdaptiveStackedBoostClassifier()
+    experiment_results["Simple_LSTM_ASXGB"][f_set] = evaluate_batch_incremental(Simple_LSTM_ASXGB, data_eval, n_eval)
     
-    # 5. LSTM Method
-    print("Evaluating LSTM + ASXGB")
-    LSTM_ASXGB = LSTM_AdaptiveStackedBoostClassifier()
-    experiment_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval, n_eval)
+    # # 6. LSTM Method
+    # print("Evaluating LSTM + ASXGB")
+    # LSTM_ASXGB = LSTM_AdaptiveStackedBoostClassifier()
+    # experiment_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval, n_eval)
 
     # elliptic_time_indexed_results(experiment_results)
     # print(experiment_results)

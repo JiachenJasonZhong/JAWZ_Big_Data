@@ -8,6 +8,8 @@ from collections import Counter
 from skmultiflow.core.base import BaseSKMObject, ClassifierMixin
 from skmultiflow.drift_detection import ADWIN
 from skmultiflow.utils import get_dimensions
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, accuracy_score
 
 
 ###### AdaptiveXGBoost ###################################################
@@ -498,23 +500,23 @@ class SimpleLSTM:
             hidden_dim (int): The dimensionality of the hidden state vectors.
         """
         self.input_dim = input_dim
-        print(f"input_dim has value: {self.input_dim} and theoretically should be an integer representing the dimensionality of the input vectors")
+        # print(f"input_dim has value: {self.input_dim} and theoretically should be an integer representing the dimensionality of the input vectors")
 
         self.hidden_dim = hidden_dim
-        print(f"hidden_dim has value: {self.hidden_dim} and theoretically should be an integer representing the dimensionality of the hidden state vectors")
+        # print(f"hidden_dim has value: {self.hidden_dim} and theoretically should be an integer representing the dimensionality of the hidden state vectors")
 
         # Initialize the input-to-hidden weights matrix with random values scaled by 0.1
         # The matrix has shape (4 * hidden_dim, input_dim + hidden_dim) to accommodate all gate weights
         self.weights_ih = np.random.rand(4 * hidden_dim, input_dim + hidden_dim) * 0.1
-        print(f"weights_ih has shape: {self.weights_ih.shape} and theoretically should be ({4*hidden_dim, input_dim+hidden_dim})")
+        # print(f"weights_ih has shape: {self.weights_ih.shape} and theoretically should be ({4*hidden_dim, input_dim+hidden_dim})")
 
         # Initialize the hidden-to-output weights matrix with random values scaled by 0.1
         self.weights_ho = np.random.rand(hidden_dim) * 0.1
-        print(f"weights_ho has shape: {self.weights_ho.shape} and theoretically should be ({hidden_dim})")
+        # print(f"weights_ho has shape: {self.weights_ho.shape} and theoretically should be ({hidden_dim})")
 
         # Initialize the bias vector with zeros
         self.bias = np.zeros(4 * hidden_dim)
-        print(f"bias has shape: {self.bias.shape} and theoretically should be ({4*hidden_dim})")
+        # print(f"bias has shape: {self.bias.shape} and theoretically should be ({4*hidden_dim})")
 
     def step(self, x, h, c):
         """
@@ -612,7 +614,7 @@ class SimpleLSTM:
             outputs.append(h)
 
         outputs = np.array(outputs)
-        print(f"outputs has shape: {outputs.shape} and theoretically should be (seq_length, hidden_dim)")
+        # print(f"outputs has shape: {outputs.shape} and theoretically should be (seq_length, hidden_dim)")
 
         # Convert the output sequence to a numpy array and return it along with the final hidden and cell states
         return outputs, h, c
@@ -631,8 +633,8 @@ class Simple_LSTM_AdaptiveStackedBoostClassifier():
         self.lstm = SimpleLSTM(input_dim=n_base_models * 2, hidden_dim=lstm_units)
         self.lstm_units = lstm_units
 
-        print(f'self.lstm.input_dim: {self.lstm.input_dim}, which should be n_base_models * 2 = {n_base_models * 2}')
-        print(f'self.lstm.hidden_dim: {self.lstm.hidden_dim}, which should be lstm_units = {lstm_units}')
+        # print(f'self.lstm.input_dim: {self.lstm.input_dim}, which should be n_base_models * 2 = {n_base_models * 2}')
+        # print(f'self.lstm.hidden_dim: {self.lstm.hidden_dim}, which should be lstm_units = {lstm_units}')
 
         self.lstm_dropout = lstm_dropout
         self.lstm_epochs = lstm_epochs
@@ -869,251 +871,203 @@ class Simple_LSTM_AdaptiveStackedBoostClassifier():
         return probabilities
 
 class LSTM:
-    def __init__(self, input_dim, hidden_dim, dropout_prob, grad_clip_threshold):
-        """
-        Initializes the LSTM class.
+    def __init__(self, input_size, hidden_size, output_size, lstm_dropout, learning_rate, weight_decay):
 
-        Args:
-            input_dim (int): The dimensionality of the input vectors.
-            hidden_dim (int): The dimensionality of the hidden state vectors.
-            dropout_prob (float): The probability of dropping out units during training. Default is 0.2.
-            grad_clip_threshold (float): The threshold for gradient clipping. Default is 1.0.
-        """
-        self.input_dim = input_dim
-        print(f"input_dim has value: {self.input_dim} and theoretically should be an integer representing the dimensionality of the input vectors")
+        # Initialize key variables 
+        self.learning_rate = learning_rate
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.num_layers = hidden_size
+        self.lstm_dropout = lstm_dropout 
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
 
-        self.hidden_dim = hidden_dim
-        print(f"hidden_dim has value: {self.hidden_dim} and theoretically should be an integer representing the dimensionality of the hidden state vectors")
+        # Initialize weights and biases
+        # print(f'hidden_size type = {hidden_size}')
+        # print(f'input_size type = {input_size}')
+        self.Wf = np.random.randn(hidden_size, input_size + hidden_size) * 0.01
+        self.Wi = np.random.randn(hidden_size, input_size + hidden_size) * 0.01
+        self.Wc = np.random.randn(hidden_size, input_size + hidden_size) * 0.01
+        self.Wo = np.random.randn(hidden_size, input_size + hidden_size) * 0.01
+        self.Wy = np.random.randn(output_size, hidden_size) * 0.01
+        self.bf = np.zeros((hidden_size, 1))
+        self.bi = np.zeros((hidden_size, 1))
+        self.bc = np.zeros((hidden_size, 1))
+        self.bo = np.zeros((hidden_size, 1))
+        self.by = np.zeros((output_size, 1))
 
-        # Initialize the input-to-hidden weights matrix with random values scaled by 0.1
-        # The matrix has shape (4 * hidden_dim, input_dim + hidden_dim) to accommodate all gate weights
-        self.weights_ih = np.random.rand(4 * hidden_dim, input_dim + hidden_dim) * 0.1
-        # print(f"weights_ih has shape: {self.weights_ih.shape} and theoretically should be ({4*hidden_dim, input_dim+hidden_dim})")
+        # Initialize gradient matrices
+        self.dWf = np.zeros_like(self.Wf)
+        self.dWi = np.zeros_like(self.Wi)
+        self.dWc = np.zeros_like(self.Wc)
+        self.dWo = np.zeros_like(self.Wo)
+        self.dWy = np.zeros_like(self.Wy)
+        self.dbf = np.zeros_like(self.bf)
+        self.dbi = np.zeros_like(self.bi)
+        self.dbc = np.zeros_like(self.bc)
+        self.dbo = np.zeros_like(self.bo)
+        self.dby = np.zeros_like(self.by)
 
-        # Initialize the hidden-to-output weights matrix with random values scaled by 0.1
-        self.weights_ho = np.random.rand(hidden_dim) * 0.1
-        # print(f"weights_ho has shape: {self.weights_ho.shape} and theoretically should be ({hidden_dim})")
+        # Initialize hidden state and cell state matrices
+        self.h_next = np.zeros((hidden_size, self.num_layers))
+        self.c_next = np.zeros((hidden_size, self.num_layers))
 
-        # Initialize the bias vector with zeros
-        self.bias = np.zeros(4 * hidden_dim)
-        # print(f"bias has shape: {self.bias.shape} and theoretically should be ({4*hidden_dim})")
+    def reset_gradients(self):
+        self.dWf.fill(0)
+        self.dWi.fill(0)
+        self.dWc.fill(0)
+        self.dWo.fill(0)
+        self.dWy.fill(0)
+        self.dbf.fill(0)
+        self.dbi.fill(0)
+        self.dbc.fill(0)
+        self.dbo.fill(0)
+        self.dby.fill(0)
 
-        # Store the dropout probability and gradient clipping threshold
-        self.dropout_prob = dropout_prob
-        self.grad_clip_threshold = grad_clip_threshold
+    def forward(self, x, h_prev, c_prev):
+        # print(f'Shape of x: {x.shape}, expected: ({num_samples}, {self.input_size})')
+        # print(f'Shape of h_prev: {h_prev.shape}, expected: ({self.hidden_size}, {self.num_layers})')
+        # print(f'Shape of c_prev: {c_prev.shape}, expected: ({self.hidden_size}, {self.num_layers})')
 
-        # Initialize the training flag to True
-        self.training = True
+        dropout_masks = []
+        y_preds = []
+        i_list = []
+        c_bar_list = []
+        f_list = []
+        o_list = []
 
-    def step(self, x, h, c):
-        """
-        Performs a single step of the LSTM computation.
+        for t in range(x.shape[0]):  # Iterate over each sample
+            xt = x[t].reshape(self.input_size, 1)  # Shape (input_size, 1)
+            h_next_t = np.zeros((self.hidden_size, self.num_layers))
+            c_next_t = np.zeros((self.hidden_size, self.num_layers))
+            h_next_t, mask = dropout(h_next_t, self.lstm_dropout)
+            dropout_masks.append(mask)
+            i_t = np.zeros((self.hidden_size, self.num_layers))
+            c_bar_t = np.zeros((self.hidden_size, self.num_layers))
+            f_t = np.zeros((self.hidden_size, self.num_layers))
+            o_t = np.zeros((self.hidden_size, self.num_layers))
 
-        Args:
-            x (np.ndarray): The input vector at the current time step.
-            h (np.ndarray): The hidden state vector from the previous time step.
-            c (np.ndarray): The cell state vector from the previous time step.
+            for l in range(self.num_layers):
+                # print(f'Layer {l+1}:')
+                h_prev_l = h_prev[:, l].reshape(self.hidden_size, 1)
+                c_prev_l = c_prev[:, l].reshape(self.hidden_size, 1)
+                # print(f'  Shape of h_prev_l: {h_prev_l.shape}, expected: ({self.hidden_size}, 1)')
+                # print(f'  Shape of c_prev_l: {c_prev_l.shape}, expected: ({self.hidden_size}, 1)')
 
-        Returns:
-            tuple: A tuple containing the updated hidden state vector and cell state vector.
-        """
-        # print(f"x has shape: {x.shape} and theoretically should be (input_dim,)")
-        # print(f"h has shape: {h.shape} and theoretically should be (hidden_dim,)")
-        # print(f"c has shape: {c.shape} and theoretically should be (hidden_dim,)")
+                concat = np.vstack((h_prev_l, xt))  # Shape (hidden_size + input_size, 1)
+                # print(f'  Shape of concat: {concat.shape}, expected: ({self.hidden_size + self.input_size}, 1)')
 
-        # Concatenate the hidden state and input vectors
-        combined = np.hstack((h, x))
-        # print(f"combined has shape: {combined.shape} and theoretically should be (hidden_dim+input_dim,)")
+                f_t[:, l] = sigmoid(np.dot(self.Wf, concat) + self.bf)[:, 0]
+                # print(f'  Shape of f_t[:, {l}]: {f_t[:, l].shape}, expected: ({self.hidden_size},)')
 
-        # Compute the gate values by multiplying the weights with the combined vector and adding the bias
-        gates = np.dot(self.weights_ih, combined) + self.bias
-        # print(f"gates has shape: {gates.shape} and theoretically should be (4*hidden_dim,)")
+                i_t[:, l] = sigmoid(np.dot(self.Wi, concat) + self.bi)[:, 0]
+                # print(f'  Shape of i_t[:, {l}]: {i_t[:, l].shape}, expected: ({self.hidden_size},)')
 
-        # Split the gate values into four parts: input gate, forget gate, output gate, and candidate cell state
-        i, f, o, g = np.split(gates, 4)
-        # print(f"i has shape: {i.shape} and theoretically should be (hidden_dim,)")
-        # print(f"f has shape: {f.shape} and theoretically should be (hidden_dim,)")
-        # print(f"o has shape: {o.shape} and theoretically should be (hidden_dim,)")
-        # print(f"g has shape: {g.shape} and theoretically should be (hidden_dim,)")
+                c_bar_t[:, l] = np.tanh(np.dot(self.Wc, concat) + self.bc)[:, 0]
+                # print(f'  Shape of c_bar_t[:, {l}]: {c_bar_t[:, l].shape}, expected: ({self.hidden_size},)')
 
-        # Apply the sigmoid activation function to the input gate, forget gate, and output gate
-        i = self.sigmoid(i)
-        f = self.sigmoid(f)
-        o = self.sigmoid(o)
+                c_next_t[:, l] = f_t[:, l] * c_prev_l[:, 0] + i_t[:, l] * c_bar_t[:, l]
+                # print(f'  Shape of c_next_t[:, {l}]: {c_next_t[:, l].shape}, expected: ({self.hidden_size},)')
 
-        # Apply the tanh activation function to the candidate cell state
-        g = np.tanh(g)
+                o_t[:, l] = sigmoid(np.dot(self.Wo, concat) + self.bo)[:, 0]
+                # print(f'  Shape of o_t[:, {l}]: {o_t[:, l].shape}, expected: ({self.hidden_size},)')
 
-        # Update the cell state by element-wise multiplying the forget gate with the previous cell state
-        # and adding the element-wise multiplication of the input gate and candidate cell state
-        c = f * c + i * g
-        # print(f"c has shape: {c.shape} and theoretically should be (hidden_dim,)")
+                h_next_t[:, l] = o_t[:, l] * np.tanh(c_next_t[:, l])
+                # print(f'  Shape of h_next_t[:, {l}]: {h_next_t[:, l].shape}, expected: ({self.hidden_size},)')
 
-        # Update the hidden state by element-wise multiplying the output gate with the tanh of the updated cell state
-        h = o * np.tanh(c)
-        # print(f"h has shape: {h.shape} and theoretically should be (hidden_dim,)")
+            yt = np.dot(self.Wy, h_next_t[:, -1].reshape(self.hidden_size, 1)) + self.by
+            y_preds.append(yt)
+            i_list.append(i_t)
+            c_bar_list.append(c_bar_t)
+            f_list.append(f_t)
+            o_list.append(o_t)
 
-        # Apply dropout to the hidden state during training
-        if self.training:
-            # Create a dropout mask with the same shape as the hidden state
-            mask = np.random.rand(*h.shape) < (1 - self.dropout_prob)
-            # print(f"dropout mask has shape: {mask.shape} and theoretically should be the same as h")
+            h_prev = h_next_t
+            c_prev = c_next_t
 
-            # Apply the dropout mask to the hidden state and scale by the inverse of the keep probability
-            h = h * mask / (1 - self.dropout_prob)
-            # print(f"hidden state after dropout has shape: {h.shape} and theoretically should be the same as before")
+        y_preds = np.array(y_preds).reshape(-1, self.output_size)
 
-        return h, c
+        # print(f'Shape of h_next: {h_next_t.shape}, expected: ({self.hidden_size}, {self.num_layers})')
+        # print(f'Shape of c_next: {c_next_t.shape}, expected: ({self.hidden_size}, {self.num_layers})')
+        # print(f'Shape of y_preds: {y_preds.shape}, expected: ({num_samples}, {self.output_size})')
 
-    def sigmoid(self, x):
-        """
-        Computes the sigmoid activation function.
+        return y_preds, h_next_t, c_next_t, i_list, c_bar_list, f_list, o_list
 
-        Args:
-            x (np.ndarray): The input values.
+    def backward(self, x, y, y_preds, h_prev, c_prev, i_list, c_bar_list, f_list, o_list):
+        # print(f'Shape of x: {x.shape}, expected: ({num_samples}, {self.input_size})')
+        # print(f'Shape of y: {y.shape}, expected: ({num_samples},)')
+        # print(f'Shape of y_preds: {y_preds.shape}, expected: ({num_samples}, {self.output_size})')
+        # print(f'Shape of h_prev: {h_prev.shape}, expected: ({self.hidden_size}, {self.num_layers})')
+        # print(f'Shape of c_prev: {c_prev.shape}, expected: ({self.hidden_size}, {self.num_layers})')
+        # print(f'Shape of dh_next: {dh_next.shape}, expected: ({self.hidden_size}, {self.num_layers})')
+        # print(f'Shape of dc_next: {dc_next.shape}, expected: ({self.hidden_size}, {self.num_layers})')
 
-        Returns:
-            np.ndarray: The output values after applying the sigmoid function.
-        """
-        return 1 / (1 + np.exp(-x))
+        for t in reversed(range(x.shape[0])):  # Iterate over each sample in reverse order
+            dE_dy = y_preds[t] - y[t] # the gradient of the binary cross-entropy loss 
+            self.dWy += np.dot(dE_dy.reshape(self.output_size, 1), h_prev[:, -1].reshape(1, self.hidden_size))
+            self.dby += dE_dy.reshape(self.output_size, 1)
 
-    def forward(self, inputs):
-        """
-        Performs the forward pass of the LSTM on a sequence of inputs.
+            dh_next_t = np.zeros((self.hidden_size, self.num_layers))
+            dc_next_t = np.zeros((self.hidden_size, self.num_layers))
 
-        Args:
-            inputs (np.ndarray): The input sequence with shape (seq_length, input_dim) or (input_dim,).
+            for l in reversed(range(self.num_layers)):
+                dh = np.dot(self.Wy.T, dE_dy.reshape(self.output_size, 1)) + dh_next_t[:, l].reshape(self.hidden_size, 1)
+                dc = dc_next_t[:, l].reshape(self.hidden_size, 1) + dh * o_list[t][:, l].reshape(self.hidden_size, 1) * (1 - np.square(np.tanh(c_prev[:, l].reshape(self.hidden_size, 1))))
 
-        Returns:
-            tuple: A tuple containing the output sequence, final hidden state, and final cell state.
-        """
-        print(f"inputs has shape: {inputs.shape} and theoretically should be (seq_length, input_dim) or (input_dim,)")
+                do = dh * np.tanh(c_prev[:, l].reshape(self.hidden_size, 1))
+                dc_bar = dh * i_list[t][:, l].reshape(self.hidden_size, 1)
+                di = dh * c_bar_list[t][:, l].reshape(self.hidden_size, 1)
+                df = dh * c_prev[:, l].reshape(self.hidden_size, 1)
 
-        # If the input is a 1D array, reshape it to a 2D array with a single sequence
-        if inputs.ndim == 1:
-            inputs = inputs.reshape(1, -1)
-            print(f"inputs has been reshaped to: {inputs.shape}")
+                xt = x[t].reshape(self.input_size, 1)
+                concat = np.vstack((h_prev[:, l].reshape(self.hidden_size, 1), xt))
 
-        # Initialize the hidden state and cell state vectors with zeros
-        h = np.zeros(self.hidden_dim)
-        c = np.zeros(self.hidden_dim)
-        # print(f"initial hidden state has shape: {h.shape} and theoretically should be (hidden_dim,)")
-        # print(f"initial cell state has shape: {c.shape} and theoretically should be (hidden_dim,)")
+                self.dWf += np.dot(df * sigmoid_derivative(f_list[t][:, l].reshape(self.hidden_size, 1)), concat.T)
+                self.dWi += np.dot(di * sigmoid_derivative(i_list[t][:, l].reshape(self.hidden_size, 1)), concat.T)
+                self.dWc += np.dot(dc_bar * (1 - np.square(c_bar_list[t][:, l].reshape(self.hidden_size, 1))), concat.T)
+                self.dWo += np.dot(do * sigmoid_derivative(o_list[t][:, l].reshape(self.hidden_size, 1)), concat.T)
 
-        # Initialize an empty list to store the output sequence
-        outputs = []
+                self.dbf += df * sigmoid_derivative(f_list[t][:, l].reshape(self.hidden_size, 1))
+                self.dbi += di * sigmoid_derivative(i_list[t][:, l].reshape(self.hidden_size, 1))
+                self.dbc += dc_bar * (1 - np.square(c_bar_list[t][:, l].reshape(self.hidden_size, 1)))
+                self.dbo += do * sigmoid_derivative(o_list[t][:, l].reshape(self.hidden_size, 1))
 
-        # Iterate over each input vector in the sequence
-        for x in inputs:
-            # Perform a single step of the LSTM computation
-            h, c = self.step(x, h, c)
-            # print(f"updated hidden state has shape: {h.shape} and theoretically should be (hidden_dim,)")
-            # print(f"updated cell state has shape: {c.shape} and theoretically should be (hidden_dim,)")
+                dh_next_t[:, l] = dh[:, 0]
+                dc_next_t[:, l] = dc[:, 0]
 
-            # Append the updated hidden state to the output sequence
-            outputs.append(h)
+        return self.dWf, self.dWi, self.dWc, self.dWo, self.dWy, self.dbf, self.dbi, self.dbc, self.dbo, self.dby
 
-        outputs = np.array(outputs)
-        # print(f"outputs has shape: {outputs.shape} and theoretically should be (seq_length, hidden_dim)")
+    def update_weights(self, learning_rate, weight_decay):
+        # Updates weights using gradients with L2 regularization.
+        self.Wf -= learning_rate * (self.dWf + weight_decay * self.Wf)
+        self.Wi -= learning_rate * (self.dWi + weight_decay * self.Wi)
+        self.Wc -= learning_rate * (self.dWc + weight_decay * self.Wc)
+        self.Wo -= learning_rate * (self.dWo + weight_decay * self.Wo)
+        self.Wy -= learning_rate * (self.dWy + weight_decay * self.Wy)
 
-        # Convert the output sequence to a numpy array and return it along with the final hidden and cell states
-        return outputs, h, c
-    
-    def train(self):
-        """
-        Sets the model to training mode.
-        """
-        self.training = True
+# Necessary functions for LSTM
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
-    def eval(self):
-        """
-        Sets the model to evaluation mode.
-        """
-        self.training = False
+def sigmoid_derivative(x):
+    return x * (1 - x)
 
-    def clip_gradients(self):
-        """
-        Clips the gradients of the model parameters to the specified threshold.
-        """
-        self.weights_ih = np.clip(self.weights_ih, -self.grad_clip_threshold, self.grad_clip_threshold)
-        # print(f"clipped weights_ih has shape: {self.weights_ih.shape} and theoretically should be (4*hidden_dim, input_dim+hidden_dim)")
+def dropout(x, dropout_rate):
 
-        self.weights_ho = np.clip(self.weights_ho, -self.grad_clip_threshold, self.grad_clip_threshold)
-        # print(f"clipped weights_ho has shape: {self.weights_ho.shape} and theoretically should be (4*hidden_dim)")
+    # Applies dropout by randomly setting a fraction of x to zero.
+    if dropout_rate > 0:
+        retain_prob = 1 - dropout_rate
+        mask = np.random.binomial(1, retain_prob, size=x.shape)
+        return x * mask, mask
+    return x, np.ones_like(x)
 
-        self.bias = np.clip(self.bias, -self.grad_clip_threshold, self.grad_clip_threshold)
-        # print(f"clipped bias has shape: {self.bias.shape} and theoretically should be (4*hidden_dim)")  
-
-class MultiLayerLSTM:
-    def __init__(self, input_dim, hidden_dims, dropout_prob, grad_clip_threshold):
-        """
-        Initializes the MultiLayerLSTM class.
-
-        Args:
-            input_dim (int): The dimensionality of the input vectors.
-            hidden_dims (list): A list of integers representing the hidden dimensionalities of each LSTM layer.
-            dropout_prob (float): The probability of dropping out units during training. Default is 0.2.
-            grad_clip_threshold (float): The threshold for gradient clipping. Default is 1.0.
-        """
-        self.num_layers = len(hidden_dims)
-        self.lstm_layers = []
-
-        # Create multiple LSTM layers
-        for i in range(self.num_layers):
-            if i == 0:
-                # First LSTM layer takes input_dim as input dimensionality
-                lstm_layer = LSTM(input_dim, hidden_dims[i], dropout_prob, grad_clip_threshold)
-            else:
-                # Subsequent LSTM layers take the hidden dimensionality of the previous layer as input dimensionality
-                lstm_layer = LSTM(hidden_dims[i-1], hidden_dims[i], dropout_prob, grad_clip_threshold)
-            self.lstm_layers.append(lstm_layer)
-
-    def forward(self, inputs):
-        """
-        Performs the forward pass of the multi-layer LSTM network.
-
-        Args:
-            inputs (np.ndarray): The input sequence with shape (seq_length, input_dim) or (input_dim,).
-
-        Returns:
-            tuple: A tuple containing the output sequence, final hidden states, and final cell states of all layers.
-        """
-        hidden_states = []
-        cell_states = []
-
-        # Iterate over LSTM layers
-        for i, lstm_layer in enumerate(self.lstm_layers):
-            if i == 0:
-                # First LSTM layer takes the original inputs
-                outputs, h, c = lstm_layer.forward(inputs)
-            else:
-                # Subsequent LSTM layers take the outputs from the previous layer as inputs
-                outputs, h, c = lstm_layer.forward(outputs)
-            hidden_states.append(h)
-            cell_states.append(c)
-
-        return outputs, hidden_states, cell_states
-
-    def train(self):
-        """
-        Sets all LSTM layers to training mode.
-        """
-        for lstm_layer in self.lstm_layers:
-            lstm_layer.train()
-
-    def eval(self):
-        """
-        Sets all LSTM layers to evaluation mode.
-        """
-        for lstm_layer in self.lstm_layers:
-            lstm_layer.eval()
-
-    def clip_gradients(self):
-        """
-        Clips the gradients of all LSTM layers.
-        """
-        for lstm_layer in self.lstm_layers:
-            lstm_layer.clip_gradients()
+def binary_cross_entropy(y_true, y_pred):
+    # Avoid division by zero
+    epsilon = 1e-12
+    y_pred = np.clip(y_pred, epsilon, 1 - epsilon)
+    loss = -np.mean(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
+    return loss
 
 class LSTM_AdaptiveStackedBoostClassifier():
     def __init__(self,
@@ -1122,19 +1076,23 @@ class LSTM_AdaptiveStackedBoostClassifier():
                  n_base_models=5,
                  n_rounds_eval_base_model=3,
                  meta_learner_train_ratio=0.4,
-                 lstm_units=[64],
-                 lstm_epochs=10, 
+                 lstm_units=64,
+                 lstm_epochs=5, 
                  lstm_dropout=0.2, 
-                 lstm_grad_clip_threshold=1.0):
+                 lstm_grad_clip_threshold=1.0,
+                 learning_rate = 0.0001,
+                 weight_decay = 0.001,
+                 output_size = 1):
         
-        self.lstm = MultiLayerLSTM(input_dim=n_base_models * 2, hidden_dims=lstm_units,
-                                   dropout_prob=lstm_dropout, grad_clip_threshold=lstm_grad_clip_threshold)        
-        self.lstm_units = lstm_units
-
-        # print(f'self.lstm.lstm_layers[0].input_dim: {self.lstm.lstm_layers[0].input_dim}, which should be n_base_models * 2 = {n_base_models * 2}')
-        # print(f'self.lstm.lstm_layers[-1].hidden_dim: {self.lstm.lstm_layers[-1].hidden_dim}, which should be lstm_units[-1] = {lstm_units[-1]}')
-
+        self.lstm = LSTM(input_size = n_base_models * 2, hidden_size = lstm_units, output_size = output_size, 
+                         lstm_dropout = lstm_dropout, learning_rate = learning_rate, weight_decay = weight_decay)
+        
         self.lstm_epochs = lstm_epochs
+        self.lstm_dropout = lstm_dropout 
+        self.lstm_grad_clip_threshold = lstm_grad_clip_threshold
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.hidden_dim = lstm_units
         self._lstm_model = None
         self._first_run = True
         self._first_run = True
@@ -1316,9 +1274,92 @@ class LSTM_AdaptiveStackedBoostClassifier():
 
         meta_features_reshaped = meta_features.reshape((-1, meta_features.shape[1]))
         # print(f'meta_features_reshaped shape (seq_length, input_dim): {meta_features_reshaped.shape}')
-        self.lstm.train()
-        self._lstm_model.forward(meta_features_reshaped)
-        self.lstm.clip_gradients()
+
+        # Define num_samples based on the number of rows in meta_features_reshaped
+        num_samples = meta_features_reshaped.shape[0]
+
+        # Define the number of epochs and batch size
+        batch_size = 100
+
+        # Initialize a list to store predictions from the final epoch
+        final_epoch_preds = []
+        accuracy_over_epochs = []
+        losses = []  # List to store loss values
+
+        # Perform training loop
+        for epoch in range(self.lstm_epochs):
+            # Temporary list for the current epoch predictions
+            current_epoch_preds = []
+            total_loss = 0
+            total_correct = 0
+            total_samples = 0
+
+            # Shuffle the training data
+            indices = np.random.permutation(num_samples)
+            x_shuffled = meta_features_reshaped[indices]
+            y_shuffled = y[indices]
+
+            # Iterate over mini-batches
+            for batch_start in range(0, num_samples, batch_size):
+                batch_end = min(batch_start + batch_size, num_samples)
+                x_batch = x_shuffled[batch_start:batch_end]
+                y_batch = y_shuffled[batch_start:batch_end]
+                batch_size_actual = y_batch.shape[0]  
+
+                # Initialize hidden state and cell state
+                h_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+                c_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+
+                # Forward pass
+                y_preds, h_next, c_next, i_list, c_bar_list, f_list, o_list = self._lstm_model.forward(x_batch, h_prev, c_prev)
+
+                # Store predictions and loss from the current batch
+                current_epoch_preds.append(y_preds)
+                loss = binary_cross_entropy(y_batch, y_preds.flatten())
+                total_loss += loss * batch_size_actual  # Weighting the loss by the batch size
+
+                # Calculate and accumulate accuracy
+                batch_predictions = (y_preds.flatten() > 0.5).astype(int)
+                total_correct += np.sum(batch_predictions == y_batch)
+                total_samples += batch_size_actual
+
+                # Backward pass
+                dWf, dWi, dWc, dWo, dWy, dbf, dbi, dbc, dbo, dby = self._lstm_model.backward(x_batch, y_batch, y_preds, h_prev, c_prev, i_list, c_bar_list, f_list, o_list)
+
+                # Clipping gradients
+                grad_norm = np.sqrt(sum(np.sum(grad**2) for grad in [dWf, dWi, dWc, dWo, dWy]))
+                if grad_norm > self.lstm_grad_clip_threshold:
+                    clip_coef = self.lstm_grad_clip_threshold / (grad_norm + 1e-6)  # Avoid division by zero
+                    dWf, dWi, dWc, dWo, dWy = [clip_coef * grad for grad in [dWf, dWi, dWc, dWo, dWy]]
+
+                # Update weights and biases
+                self._lstm_model.update_weights(learning_rate=self.learning_rate, weight_decay=self.weight_decay)
+                self._lstm_model.bf -= self.learning_rate * dbf
+                self._lstm_model.bi -= self.learning_rate * dbi
+                self._lstm_model.bc -= self.learning_rate * dbc
+                self._lstm_model.bo -= self.learning_rate * dbo
+                self._lstm_model.by -= self.learning_rate * dby
+
+                # Reset gradients for the next batch
+                self._lstm_model.reset_gradients()
+
+                # After processing all batches in the current epoch
+                if epoch == self.lstm_epochs - 1:  # Check if it's the final epoch
+                    final_epoch_preds = current_epoch_preds  # Only store the final epoch's predictions
+            
+            # Compute average loss and accuracy for the epoch
+            average_epoch_loss = total_loss / total_samples
+            epoch_accuracy = total_correct / total_samples
+            losses.append(average_epoch_loss)
+            accuracy_over_epochs.append(epoch_accuracy)
+
+            print(f"Epoch {epoch+1}/{self.lstm_epochs} completed.")
+
+        # # Concatenate all predictions from the final epoch
+        # final_y_preds = np.concatenate([pred for pred in final_epoch_preds], axis=0)
+        # print(f"Final predictions shape: {final_y_preds.shape}")
+        # print(f'accuracy_over_epochs: {accuracy_over_epochs}')
+        # print(f'losses: {losses}')
 
     def predict(self, X):
 
@@ -1339,17 +1380,22 @@ class LSTM_AdaptiveStackedBoostClassifier():
             meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))                    
         meta_features = self._construct_meta_features(meta_features)
 
-        # predict using the LSTM model
-        self.lstm.eval()
-        lstm_outputs, _, _ = self._lstm_model.forward(meta_features.reshape((-1, meta_features.shape[1])))
-        lstm_predictions = lstm_outputs[:, -1] 
+        # Reconstruct meta features to match the expected input size for LSTM
+        meta_features = self._construct_meta_features(meta_features)
 
-        if np.isscalar(lstm_predictions):
-            print('np value is a scalar value!')
-            print(lstm_predictions)
-            return np.full(X.shape[0], (lstm_predictions > 0.5).astype(int))
-        else:
-            return (lstm_predictions > 0.5).astype(int)
+        # Initialize hidden state and cell state for LSTM prediction
+        h_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+        c_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+
+        # Forward pass through LSTM model
+        # Assume that we are processing the entire dataset X as one batch
+        y_preds, _, _, _, _, _, _ = self._lstm_model.forward(meta_features, h_prev, c_prev)
+        
+        # Generate final predictions
+        # Convert LSTM outputs to binary predictions (0 or 1)
+        final_predictions = (y_preds.flatten() > 0.5).astype(int)
+        return final_predictions
+
     
     def eval_proba(self, X):
         
@@ -1364,8 +1410,18 @@ class LSTM_AdaptiveStackedBoostClassifier():
             meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))
         
         meta_features = self._construct_meta_features(meta_features)
-        # predict probabilities using the LSTM model
-        lstm_outputs, _, _ = self._lstm_model.forward(meta_features.reshape((-1, meta_features.shape[1])))
-        lstm_predictions = np.dot(lstm_outputs, self._lstm_model.lstm_layers[-1].weights_ho)
-        probabilities = 1 / (1 + np.exp(-lstm_predictions))
+
+        # Reconstruct meta features to match the expected input size for LSTM
+        meta_features = self._construct_meta_features(meta_features)
+
+        # Initialize hidden state and cell state for LSTM
+        h_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+        c_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+
+        # Forward pass through LSTM model assuming processing the entire dataset X as one batch
+        y_preds, _, _, _, _, _, _ = self._lstm_model.forward(meta_features, h_prev, c_prev)
+        
+        # Instead of converting to binary predictions, return the sigmoid outputs
+        # as the probabilities. Adjust depending on your LSTM's output layer configuration.
+        probabilities = sigmoid(y_preds.flatten())
         return probabilities
