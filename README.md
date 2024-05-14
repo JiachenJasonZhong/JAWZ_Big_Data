@@ -9,7 +9,7 @@ Follow these commands in your terminal to clone the repository and set up the en
 
 ```bash
 git clone git@github.com:JiachenJasonZhong/JAWZ_Big_Data.git
-conda install mamba -n base -c conda-forge # Note this using conda 23.11.0
+conda install mamba -n base -c conda-forge # Note this using conda 23.11.0                        # Update May 13,2024： Alternatively, you should use the fresh install (by install) with the following link (make sure the path to be added to the path at the environmental variables): https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html
 mamba env create -f /path/to/CSE_project5.yaml # Replace /path/to/ with your specific path
 conda activate CSE_project5
 pip install sklearn-deap # Note this is using pip 24.0 
