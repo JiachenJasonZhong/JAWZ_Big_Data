@@ -14,7 +14,7 @@ mamba env create -f /path/to/CSE_project5.yaml # Replace /path/to/ with your spe
 conda activate CSE_project5
 pip install sklearn-deap # Note this is using pip 24.0 
 conda install scikit-learn=0.23.2 -y
-pip install -U scikit-multiflow=0.5.3
+pip install -U scikit-multiflow==0.5.3
 ```
 
 ## Step 2: Modify the _data.py file 
