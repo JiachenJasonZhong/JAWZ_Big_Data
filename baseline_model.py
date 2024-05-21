@@ -27,7 +27,7 @@ print("All critical packages are compatible.")
 import cryptoaml.datareader as cdr
 from cryptoaml.metrics import elliptic_time_indexed_results
 from cryptoaml.models import (AdaptiveXGBoostClassifier, AdaptiveStackedBoostClassifier, 
-                              Simple_LSTM_AdaptiveStackedBoostClassifier, LSTM_AdaptiveStackedBoostClassifier)
+                              LSTM_AdaptiveStackedBoostClassifier, LSTM_Base)
 
 def warn(*args, **kwargs):
     pass
@@ -85,7 +85,10 @@ def evaluate_batch_incremental(model, data, t_eval=0):
         train_set_y = train_set["class"]      
 
         # partially fit model 
-        model.partial_fit(train_set_X.values, train_set_y.values)    
+        if isinstance(model, LSTM_Base):
+            model.train_lstm(train_set_X.values, train_set_y.values)
+        else:
+            model.partial_fit(train_set_X.values, train_set_y.values)   
 
         # get test data for the current timestep + 1 
         test_set = data[data["ts"] == ts + 1]
@@ -254,15 +257,20 @@ def evaluate(feature_set, n_eval):
     # ASXGB = AdaptiveStackedBoostClassifier()
     # experiment_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval, n_eval)
 
-    # 5. Simple LSTM Method
-    print("Evaluating Simple_LSTM + ASXGB")
-    Simple_LSTM_ASXGB = Simple_LSTM_AdaptiveStackedBoostClassifier()
-    experiment_results["Simple_LSTM_ASXGB"][f_set] = evaluate_batch_incremental(Simple_LSTM_ASXGB, data_eval, n_eval)
+    # # 5. Simple LSTM Method
+    # print("Evaluating Simple_LSTM + ASXGB")
+    # Simple_LSTM_ASXGB = Simple_LSTM_AdaptiveStackedBoostClassifier()
+    # experiment_results["Simple_LSTM_ASXGB"][f_set] = evaluate_batch_incremental(Simple_LSTM_ASXGB, data_eval, n_eval)
     
-    # # 6. LSTM Method
+    # # 6. LSTM Method with Xgboost
     # print("Evaluating LSTM + ASXGB")
     # LSTM_ASXGB = LSTM_AdaptiveStackedBoostClassifier()
     # experiment_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval, n_eval)
+
+    # 7. LSTM Method WITHOUT Xgboost
+    print("Evaluating LSTM with no xgboost")
+    LSTM_base = LSTM_Base()
+    experiment_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_base, data_eval, n_eval)
 
     # elliptic_time_indexed_results(experiment_results)
     # print(experiment_results)
@@ -274,6 +282,5 @@ def evaluate(feature_set, n_eval):
                 results_filename = f"{model_key}_{feature_key}_results.csv"
                 results["time_metrics"].to_csv(results_filename, index=False)
                 print(f"Results saved to {results_filename}")
-
 
 evaluate("AF", 35)

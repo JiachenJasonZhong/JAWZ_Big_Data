@@ -490,386 +490,6 @@ class AdaptiveStackedBoostClassifier():
         meta_features = self._construct_meta_features(meta_features)
         return self._meta_learner.predict_proba(meta_features)
 
-class SimpleLSTM:
-    def __init__(self, input_dim, hidden_dim):
-        """
-        Initializes the SimpleLSTM class.
-
-        Args:
-            input_dim (int): The dimensionality of the input vectors.
-            hidden_dim (int): The dimensionality of the hidden state vectors.
-        """
-        self.input_dim = input_dim
-        # print(f"input_dim has value: {self.input_dim} and theoretically should be an integer representing the dimensionality of the input vectors")
-
-        self.hidden_dim = hidden_dim
-        # print(f"hidden_dim has value: {self.hidden_dim} and theoretically should be an integer representing the dimensionality of the hidden state vectors")
-
-        # Initialize the input-to-hidden weights matrix with random values scaled by 0.1
-        # The matrix has shape (4 * hidden_dim, input_dim + hidden_dim) to accommodate all gate weights
-        self.weights_ih = np.random.rand(4 * hidden_dim, input_dim + hidden_dim) * 0.1
-        # print(f"weights_ih has shape: {self.weights_ih.shape} and theoretically should be ({4*hidden_dim, input_dim+hidden_dim})")
-
-        # Initialize the hidden-to-output weights matrix with random values scaled by 0.1
-        self.weights_ho = np.random.rand(hidden_dim) * 0.1
-        # print(f"weights_ho has shape: {self.weights_ho.shape} and theoretically should be ({hidden_dim})")
-
-        # Initialize the bias vector with zeros
-        self.bias = np.zeros(4 * hidden_dim)
-        # print(f"bias has shape: {self.bias.shape} and theoretically should be ({4*hidden_dim})")
-
-    def step(self, x, h, c):
-        """
-        Performs a single step of the LSTM computation.
-
-        Args:
-            x (np.ndarray): The input vector at the current time step.
-            h (np.ndarray): The hidden state vector from the previous time step.
-            c (np.ndarray): The cell state vector from the previous time step.
-
-        Returns:
-            tuple: A tuple containing the updated hidden state vector and cell state vector.
-        """
-        # print(f"x has shape: {x.shape} and theoretically should be (input_dim,)")
-        # print(f"h has shape: {h.shape} and theoretically should be (hidden_dim,)")
-        # print(f"c has shape: {c.shape} and theoretically should be (hidden_dim,)")
-
-        # Concatenate the hidden state and input vectors
-        combined = np.hstack((h, x))
-        # print(f"combined has shape: {combined.shape} and theoretically should be (hidden_dim+input_dim,)")
-
-        # Compute the gate values by multiplying the weights with the combined vector and adding the bias
-        gates = np.dot(self.weights_ih, combined) + self.bias
-        # print(f"gates has shape: {gates.shape} and theoretically should be (4*hidden_dim,)")
-
-        # Split the gate values into four parts: input gate, forget gate, output gate, and candidate cell state
-        i, f, o, g = np.split(gates, 4)
-        # print(f"i has shape: {i.shape} and theoretically should be (hidden_dim,)")
-        # print(f"f has shape: {f.shape} and theoretically should be (hidden_dim,)")
-        # print(f"o has shape: {o.shape} and theoretically should be (hidden_dim,)")
-        # print(f"g has shape: {g.shape} and theoretically should be (hidden_dim,)")
-
-        # Apply the sigmoid activation function to the input gate, forget gate, and output gate
-        i = self.sigmoid(i)
-        f = self.sigmoid(f)
-        o = self.sigmoid(o)
-
-        # Apply the tanh activation function to the candidate cell state
-        g = np.tanh(g)
-
-        # Update the cell state by element-wise multiplying the forget gate with the previous cell state
-        # and adding the element-wise multiplication of the input gate and candidate cell state
-        c = f * c + i * g
-        # print(f"c has shape: {c.shape} and theoretically should be (hidden_dim,)")
-
-        # Update the hidden state by element-wise multiplying the output gate with the tanh of the updated cell state
-        h = o * np.tanh(c)
-        # print(f"h has shape: {h.shape} and theoretically should be (hidden_dim,)")
-
-        return h, c
-
-    def sigmoid(self, x):
-        """
-        Computes the sigmoid activation function.
-
-        Args:
-            x (np.ndarray): The input values.
-
-        Returns:
-            np.ndarray: The output values after applying the sigmoid function.
-        """
-        return 1 / (1 + np.exp(-x))
-
-    def forward(self, inputs):
-        """
-        Performs the forward pass of the LSTM on a sequence of inputs.
-
-        Args:
-            inputs (np.ndarray): The input sequence with shape (seq_length, input_dim) or (input_dim,).
-
-        Returns:
-            tuple: A tuple containing the output sequence, final hidden state, and final cell state.
-        """
-        print(f"inputs has shape: {inputs.shape} and theoretically should be (seq_length, input_dim) or (input_dim,)")
-
-        # If the input is a 1D array, reshape it to a 2D array with a single sequence
-        if inputs.ndim == 1:
-            inputs = inputs.reshape(1, -1)
-            print(f"inputs has been reshaped to: {inputs.shape}")
-
-        # Initialize the hidden state and cell state vectors with zeros
-        h = np.zeros(self.hidden_dim)
-        c = np.zeros(self.hidden_dim)
-        # print(f"h has shape: {h.shape} and theoretically should be (hidden_dim,)")
-        # print(f"c has shape: {c.shape} and theoretically should be (hidden_dim,)")
-
-        # Initialize an empty list to store the output sequence
-        outputs = []
-
-        # Iterate over each input vector in the sequence
-        for x in inputs:
-            # Perform a single step of the LSTM computation
-            h, c = self.step(x, h, c)
-            # Append the updated hidden state to the output sequence
-            outputs.append(h)
-
-        outputs = np.array(outputs)
-        # print(f"outputs has shape: {outputs.shape} and theoretically should be (seq_length, hidden_dim)")
-
-        # Convert the output sequence to a numpy array and return it along with the final hidden and cell states
-        return outputs, h, c
-    
-class Simple_LSTM_AdaptiveStackedBoostClassifier():
-    def __init__(self,
-                 min_window_size=None, 
-                 max_window_size=2000,
-                 n_base_models=5,
-                 n_rounds_eval_base_model=3,
-                 meta_learner_train_ratio=0.4,
-                 lstm_units=64,
-                 lstm_dropout=0.2,
-                 lstm_epochs=10):
-        
-        self.lstm = SimpleLSTM(input_dim=n_base_models * 2, hidden_dim=lstm_units)
-        self.lstm_units = lstm_units
-
-        # print(f'self.lstm.input_dim: {self.lstm.input_dim}, which should be n_base_models * 2 = {n_base_models * 2}')
-        # print(f'self.lstm.hidden_dim: {self.lstm.hidden_dim}, which should be lstm_units = {lstm_units}')
-
-        self.lstm_dropout = lstm_dropout
-        self.lstm_epochs = lstm_epochs
-        self._lstm_model = None
-        self._first_run = True
-        self.max_window_size = max_window_size
-        self.min_window_size = min_window_size
-        
-        # validate 'n_base_models' 
-        if n_base_models <= 1:
-            raise ValueError("'n_base_models' must be > 1")
-        self._n_base_models = n_base_models
-        # validate 'n_rounds_eval_base_model' 
-        if n_rounds_eval_base_model > n_base_models or n_rounds_eval_base_model <= 0:
-            raise ValueError("'n_rounds_eval_base_model' must be > 0 and <= to 'n_base_models'")
-        self._n_rounds_eval_base_model = n_rounds_eval_base_model
-        self._meta_learner = xgb.XGBClassifier(n_jobs=-1)
-        self.meta_learner_train_ratio = meta_learner_train_ratio
-        self._X_buffer = np.array([])
-        self._y_buffer = np.array([])
-
-        # 3*N matrix 
-        # 1st row - base-level model
-        # 2nd row - evaluation rounds 
-        self._base_models = [[None for x in range(n_base_models)] for y in range(3)]
-        
-        self._reset_window_size()
-
-    def _adjust_window_size(self):
-        if self._dynamic_window_size < self.max_window_size:
-            self._dynamic_window_size *= 2
-            if self._dynamic_window_size > self.max_window_size:
-                self.window_size = self.max_window_size
-            else:
-                self._window_size = self._dynamic_window_size
-
-    def _reset_window_size(self):
-        if self.min_window_size:
-            self._dynamic_window_size = self.min_window_size
-        else:
-            self._dynamic_window_size = self.max_window_size
-        self._window_size = self._dynamic_window_size
-
-        
-    def partial_fit(self, X, y):
-        if self._first_run:
-            self._X_buffer = np.array([]).reshape(0, X.shape[1])
-            self._y_buffer = np.array([])
-            self._first_run = False
-                           
-        self._X_buffer = np.concatenate((self._X_buffer, X))
-        self._y_buffer = np.concatenate((self._y_buffer, y))
-        while self._X_buffer.shape[0] >= self._window_size:
-            self._train_on_mini_batch(X=self._X_buffer[0:self._window_size, :],
-                                      y=self._y_buffer[0:self._window_size])
-            delete_idx = [i for i in range(self._window_size)]
-            self._X_buffer = np.delete(self._X_buffer, delete_idx, axis=0)
-            self._y_buffer = np.delete(self._y_buffer, delete_idx, axis=0)
-    
-    def _train_new_base_model(self, X_base, y_base, X_meta, y_meta):
-        
-        # new base-level model  
-        new_base_model = xgb.XGBClassifier(n_jobs=-1)
-        # first train the base model on the base-level training set 
-        new_base_model.fit(X_base, y_base)
-        # then extract the predicted probabilities to be added as meta-level features
-        y_predicted = new_base_model.predict_proba(X_meta)   
-        # once the meta-features for this specific base-model are extracted,
-        # we incrementally fit this base-model to the rest of the data,
-        # this is done so this base-model is trained on a full batch 
-        new_base_model.fit(X_meta, y_meta, xgb_model=new_base_model.get_booster())
-        return new_base_model, y_predicted
-    
-    def _construct_meta_features(self, meta_features):
-        
-        # get size of of meta-features
-        meta_features_shape = meta_features.shape[1]  
-        # get expected number of features,
-        # binary probabilities from the total number of base-level models
-        meta_features_expected = self._n_base_models * 2
-        
-        # since the base-level models list is not full, 
-        # we need to fill the features until the list is full, 
-        # so we set the remaining expected meta-features as 0
-        if meta_features_shape < meta_features_expected:
-            diff = meta_features_expected - meta_features_shape
-            empty_features = np.zeros((meta_features.shape[0], diff))
-            meta_features = np.hstack((meta_features, empty_features)) 
-        return meta_features 
-        
-    def _get_weakest_base_learner(self):
-        
-        # loop rounds
-        worst_model_idx = None 
-        worst_performance = 1
-        for idx in range(len(self._base_models[0])):
-            current_round = self._base_models[1][idx]
-            if current_round < self._n_rounds_eval_base_model:
-                continue 
-            
-            current_performance = self._base_models[2][idx].sum()
-            if current_performance < worst_performance:
-                worst_performance = current_performance 
-                worst_model_idx = idx
-
-        return worst_model_idx
-    
-    def _train_on_mini_batch(self, X, y):
-        
-        # ----------------------------------------------------------------------------
-        # STEP 1: split mini batch to base-level and meta-level training set
-        # ----------------------------------------------------------------------------
-        base_idx = int(self._window_size * (1.0 - self.meta_learner_train_ratio))
-        X_base = X[0: base_idx, :]
-        y_base = y[0: base_idx] 
-
-        # this part will be used to train the meta-level model,
-        # and to continue training the base-level models on the rest of this batch
-        X_meta = X[base_idx:self._window_size, :]  
-        y_meta = y[base_idx:self._window_size]
-        
-        # ----------------------------------------------------------------------------
-        # STEP 2: train previous base-models 
-        # ----------------------------------------------------------------------------
-        meta_features = []
-        base_models_len = self._n_base_models - self._base_models[0].count(None)
-        if base_models_len > 0: # check if we have any base-level models         
-            base_model_performances = self._meta_learner.feature_importances_
-            for b_idx in range(base_models_len): # loop and train and extract meta-level features 
-                    
-                # continuation of training (incremental) on base-level model,
-                # using the base-level training set 
-                base_model = self._base_models[0][b_idx]
-                base_model.fit(X_base, y_base, xgb_model=base_model.get_booster())
-                y_predicted = base_model.predict_proba(X_meta) # extract meta-level features 
-                                
-                # extract meta-features 
-                meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))                    
-                
-                # once the meta-features for this specific base-model are extracted,
-                # we incrementally fit this base-model to the rest of the data,
-                # this is done so this base-model is trained on a full batch 
-                base_model.fit(X_meta, y_meta, xgb_model=base_model.get_booster())
-                                
-                # update base-level model list 
-                self._base_models[0][b_idx] = base_model
-                current_round = self._base_models[1][b_idx]
-                last_performance = base_model_performances[b_idx * 2] + base_model_performances[(b_idx*2)+1] 
-                self._base_models[2][b_idx][current_round%self._n_rounds_eval_base_model] = last_performance
-                self._base_models[1][b_idx] = current_round + 1
-                
-        # ----------------------------------------------------------------------------
-        # STEP 3: with each new batch, we create/train a new base model 
-        # ----------------------------------------------------------------------------
-        new_base_model, new_base_model_meta_features = self._train_new_base_model(X_base, y_base, X_meta, y_meta)
-
-        insert_idx = base_models_len
-        if base_models_len == 0:
-            meta_features = new_base_model_meta_features
-        elif base_models_len > 0 and base_models_len < self._n_base_models: 
-            meta_features = np.hstack((meta_features, new_base_model_meta_features))     
-        else: 
-            insert_idx = self._get_weakest_base_learner()           
-            meta_features[:, insert_idx * 2] = new_base_model_meta_features[:,0]
-            meta_features[:, (insert_idx * 2) + 1] = new_base_model_meta_features[:,1]
-            
-        self._base_models[0][insert_idx] = new_base_model 
-        self._base_models[1][insert_idx] = 0 
-        self._base_models[2][insert_idx] = np.zeros(self._n_rounds_eval_base_model) 
-
-        # STEP 4: train the meta-level model 
-        meta_features = self._construct_meta_features(meta_features)
-        
-        if base_models_len == 0:
-            self._meta_learner.fit(meta_features, y_meta)
-        else:
-            self._meta_learner.fit(meta_features, y_meta, xgb_model=self._meta_learner.get_booster())
-
-        # STEP 5: train the LSTM model
-        if self._lstm_model is None:
-            self._lstm_model = self.lstm
-
-        meta_features_reshaped = meta_features.reshape((-1, meta_features.shape[1]))
-        print(f'meta_features_reshaped shape (seq_length, input_dim): {meta_features_reshaped.shape}')
-        self._lstm_model.forward(meta_features_reshaped)
-
-    def predict(self, X):
-
-        # only one model in ensemble use its predictions 
-        base_models_len = self._n_base_models - self._base_models[0].count(None)
-        if base_models_len < self._n_base_models:
-            predictions = []
-            for i in range(base_models_len):
-                tmp_predictions = self._base_models[0][i].predict(X)
-                predictions.append(tmp_predictions)
-            output = np.array([int(Counter(col).most_common(1)[0][0]) for col in zip(*predictions)])
-            return output
-        
-        # predict via meta learner 
-        meta_features = []           
-        for b_idx in range(base_models_len):
-            y_predicted = self._base_models[0][b_idx].predict_proba(X) 
-            meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))                    
-        meta_features = self._construct_meta_features(meta_features)
-
-        # predict using the LSTM model
-        lstm_outputs, _, _ = self._lstm_model.forward(meta_features.reshape((-1, meta_features.shape[1])))
-        lstm_predictions = lstm_outputs[:, -1] 
-
-        if np.isscalar(lstm_predictions):
-            print('np value is a scalar value!')
-            print(lstm_predictions)
-            return np.full(X.shape[0], (lstm_predictions > 0.5).astype(int))
-        else:
-            return (lstm_predictions > 0.5).astype(int)
-    
-    def eval_proba(self, X):
-        
-        # only one model in ensemble use its predictions 
-        base_models_len = self._n_base_models - self._base_models[0].count(None)
-        if base_models_len == 0:
-            raise Exception("No base models have been trained.")
-
-        meta_features = []
-        for b_idx in range(base_models_len):
-            y_predicted = self._base_models[0][b_idx].predict_proba(X)
-            meta_features = y_predicted if b_idx == 0 else np.hstack((meta_features, y_predicted))
-        
-        meta_features = self._construct_meta_features(meta_features)
-        # predict probabilities using the LSTM model
-        lstm_outputs, _, _ = self._lstm_model.forward(meta_features.reshape((-1, meta_features.shape[1])))
-        lstm_predictions = np.dot(lstm_outputs, self._lstm_model.weights_ho)
-        probabilities = 1 / (1 + np.exp(-lstm_predictions))
-        return probabilities
-
 class LSTM:
     def __init__(self, input_size, hidden_size, output_size, lstm_dropout, learning_rate, weight_decay):
 
@@ -1047,6 +667,13 @@ class LSTM:
         self.Wy -= learning_rate * (self.dWy + weight_decay * self.Wy)
 
 # Necessary functions for LSTM
+lstm_units = 64
+lstm_epochs = 5 
+lstm_dropout = 0.2 
+lstm_grad_clip_threshold = 1.0
+learning_rate = 0.0001
+weight_decay = 0.001
+
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
@@ -1069,6 +696,143 @@ def binary_cross_entropy(y_true, y_pred):
     loss = -np.mean(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
     return loss
 
+class LSTM_Base():
+    def __init__(self,
+                 lstm_units=lstm_units,
+                 lstm_epochs=lstm_epochs, 
+                 lstm_dropout=lstm_dropout, 
+                 lstm_grad_clip_threshold=lstm_grad_clip_threshold,
+                 learning_rate = learning_rate,
+                 weight_decay = weight_decay,
+                 output_size = 1):
+        
+        self.lstm_epochs = lstm_epochs
+        self.lstm_dropout = lstm_dropout 
+        self.lstm_grad_clip_threshold = lstm_grad_clip_threshold
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.hidden_dim = lstm_units
+        self._lstm_model = None
+
+    def train_lstm(self, x, y):
+                   
+        # Train the LSTM model
+        if self._lstm_model is None:
+            self._lstm_model = LSTM(input_size=x.shape[1], hidden_size=self.hidden_dim, output_size=1, 
+                        lstm_dropout=self.lstm_dropout, learning_rate=self.learning_rate, weight_decay=self.weight_decay)
+
+        # Define num_samples based on X
+        num_samples = x.shape[0]
+
+        # Define the number of epochs and batch size
+        batch_size = 100
+
+        # Initialize a list to store predictions from the final epoch
+        final_epoch_preds = []
+        accuracy_over_epochs = []
+        losses = []  # List to store loss values
+
+        # Perform training loop
+        for epoch in range(self.lstm_epochs):
+            print(f"Epoch {epoch+1}/{self.lstm_epochs} initiated.")
+
+            # Temporary list for the current epoch predictions
+            current_epoch_preds = []
+            total_loss = 0
+            total_correct = 0
+            total_samples = 0
+
+            # Shuffle the training data
+            indices = np.random.permutation(num_samples)
+            x_shuffled = x[indices]
+            y_shuffled = y[indices]
+
+            # Iterate over mini-batches
+            for batch_start in range(0, num_samples, batch_size):
+                batch_end = min(batch_start + batch_size, num_samples)
+                x_batch = x_shuffled[batch_start:batch_end]
+                y_batch = y_shuffled[batch_start:batch_end]
+                batch_size_actual = y_batch.shape[0]  
+
+                # Initialize hidden state and cell state
+                h_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+                c_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+
+                # Forward pass
+                y_preds, h_next, c_next, i_list, c_bar_list, f_list, o_list = self._lstm_model.forward(x_batch, h_prev, c_prev)
+
+                # Store predictions and loss from the current batch
+                current_epoch_preds.append(y_preds)
+                loss = binary_cross_entropy(y_batch, y_preds.flatten())
+                total_loss += loss * batch_size_actual  # Weighting the loss by the batch size
+
+                # Calculate and accumulate accuracy
+                batch_predictions = (y_preds.flatten() > 0.5).astype(int)
+                total_correct += np.sum(batch_predictions == y_batch)
+                total_samples += batch_size_actual
+
+                # Backward pass
+                dWf, dWi, dWc, dWo, dWy, dbf, dbi, dbc, dbo, dby = self._lstm_model.backward(x_batch, y_batch, y_preds, h_prev, c_prev, i_list, c_bar_list, f_list, o_list)
+
+                # Clipping gradients
+                grad_norm = np.sqrt(sum(np.sum(grad**2) for grad in [dWf, dWi, dWc, dWo, dWy]))
+                if grad_norm > self.lstm_grad_clip_threshold:
+                    clip_coef = self.lstm_grad_clip_threshold / (grad_norm + 1e-6)  # Avoid division by zero
+                    dWf, dWi, dWc, dWo, dWy = [clip_coef * grad for grad in [dWf, dWi, dWc, dWo, dWy]]
+
+                # Update weights and biases
+                self._lstm_model.update_weights(learning_rate=self.learning_rate, weight_decay=self.weight_decay)
+                self._lstm_model.bf -= self.learning_rate * dbf
+                self._lstm_model.bi -= self.learning_rate * dbi
+                self._lstm_model.bc -= self.learning_rate * dbc
+                self._lstm_model.bo -= self.learning_rate * dbo
+                self._lstm_model.by -= self.learning_rate * dby
+
+                # Reset gradients for the next batch
+                self._lstm_model.reset_gradients()
+
+                # After processing all batches in the current epoch
+                if epoch == self.lstm_epochs - 1:  # Check if it's the final epoch
+                    final_epoch_preds = current_epoch_preds  # Only store the final epoch's predictions
+            
+            # Compute average loss and accuracy for the epoch
+            average_epoch_loss = total_loss / total_samples
+            epoch_accuracy = total_correct / total_samples
+            losses.append(average_epoch_loss)
+            accuracy_over_epochs.append(epoch_accuracy)
+
+            print(f"Epoch {epoch+1}/{self.lstm_epochs} completed.")
+
+    def predict(self, X):
+
+        # Initialize hidden state and cell state for LSTM prediction
+        h_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+        c_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+
+        # Forward pass through LSTM model
+        # Assume that we are processing the entire dataset X as one batch
+        y_preds, _, _, _, _, _, _ = self._lstm_model.forward(X, h_prev, c_prev)
+        
+        # Generate final predictions
+        # Convert LSTM outputs to binary predictions (0 or 1)
+        final_predictions = (y_preds.flatten() > 0.5).astype(int)
+        return final_predictions
+
+    
+    def eval_proba(self, X):
+
+        # Initialize hidden state and cell state for LSTM
+        h_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+        c_prev = np.zeros((self.hidden_dim, self._lstm_model.num_layers))
+
+        # Forward pass through LSTM model assuming processing the entire dataset X as one batch
+        y_preds, _, _, _, _, _, _ = self._lstm_model.forward(X, h_prev, c_prev)
+        
+        # Instead of converting to binary predictions, return the sigmoid outputs
+        # as the probabilities. Adjust depending on your LSTM's output layer configuration.
+        probabilities = sigmoid(y_preds.flatten())
+        return probabilities
+
 class LSTM_AdaptiveStackedBoostClassifier():
     def __init__(self,
                  min_window_size=None, 
@@ -1076,12 +840,12 @@ class LSTM_AdaptiveStackedBoostClassifier():
                  n_base_models=5,
                  n_rounds_eval_base_model=3,
                  meta_learner_train_ratio=0.4,
-                 lstm_units=64,
-                 lstm_epochs=5, 
-                 lstm_dropout=0.2, 
-                 lstm_grad_clip_threshold=1.0,
-                 learning_rate = 0.0001,
-                 weight_decay = 0.001,
+                 lstm_units=lstm_units,
+                 lstm_epochs=lstm_epochs, 
+                 lstm_dropout=lstm_dropout, 
+                 lstm_grad_clip_threshold=lstm_grad_clip_threshold,
+                 learning_rate=learning_rate,
+                 weight_decay=weight_decay,
                  output_size = 1):
         
         self.lstm = LSTM(input_size = n_base_models * 2, hidden_size = lstm_units, output_size = output_size, 
