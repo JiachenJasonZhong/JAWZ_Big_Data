@@ -1,0 +1,2 @@
+metrics,total_pos_label
+"[('True Negtaives', 15587), ('False Positives', 0), ('False Negtaives', 1083), ('True Positives', 0), ('Accuracy', 0.9350329934013197), ('Precision', 0.0), ('Recall', 0.0), ('F1 Score', 0.0), ('Specificity', 1.0), ('NPV', 0.9350329934013197), ('FPR', 0.0), ('FDR', 0), ('MCC', 0.0), ('Confusion Matrix', (15587, 0, 1083, 0)), ('ROC_AUC', 0.5), ('AUCPR', 0.06496700659868027)]",1083

@@ -61,30 +61,30 @@ class Elliptic_Dataset(_BaseDatareader):
                 self.LABEL_ILLICIT: self._label_illicit,
                 self.LABEL_UNKNOWN: self._label_unknown}
 
-    @property
-    def feature_cols_LF_(self):
-        """Get the feature names for the Local feature set (LF)."""
-        return self._cols_lf      
+    # @property
+    # def feature_cols_LF_(self):
+    #     """Get the feature names for the Local feature set (LF)."""
+    #     return self._cols_lf      
 
     @property
     def feature_cols_AF_(self):
         """Get the feature names for the All feature set (AF)."""
         return self.feature_cols_      
 
-    @property
-    def feature_cols_NE_(self):
-        """Get the feature names for the node embeddings feature set (NE)."""
-        return self._cols_ne      
+    # @property
+    # def feature_cols_NE_(self):
+    #     """Get the feature names for the node embeddings feature set (NE)."""
+    #     return self._cols_ne      
 
-    @property
-    def feature_cols_LF_NE_(self):
-        """Get the feature names for the Local feature set + node embeddings (LF_NE)."""
-        return self._cols_lf + self._cols_ne     
+    # @property
+    # def feature_cols_LF_NE_(self):
+    #     """Get the feature names for the Local feature set + node embeddings (LF_NE)."""
+    #     return self._cols_lf + self._cols_ne     
 
-    @property
-    def feature_cols_AF_NE_(self):
-        """Get the feature names for the All feature set + node embeddings (AF_NE)."""
-        return  self.feature_cols_ + self._cols_ne     
+    # @property
+    # def feature_cols_AF_NE_(self):
+    #     """Get the feature names for the All feature set + node embeddings (AF_NE)."""
+    #     return  self.feature_cols_ + self._cols_ne     
 
     def get_feature_names(self, feat_set, inc_meta=False):
 
