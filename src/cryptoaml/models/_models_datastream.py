@@ -852,17 +852,17 @@ class LSTM_Base():
         self.scale_factor = scale_factor
         self.threshold = threshold
 
-        print("\n" + "="*50)
-        print(f"SELF.LSTM_UNITS = {self.hidden_dim}")
-        print(f"SELF.LSTM_EPOCHS = {self.lstm_epochs}")
-        print(f"SELF.LSTM_DROPOUT = {self.lstm_dropout}")
-        print(f"SELF.LSTM_GRADCLIP = {self.lstm_grad_clip_threshold}")
-        print(f"SELF.LSTM_LEARNING = {self.learning_rate}")
-        print(f"SELF.LSTM_WEIGHTDECAY = {self.weight_decay}")
-        print(f"SELF.TARGET_VALUE = {self.target_value}")
-        print(f"SELF.SCALE_FACTOR = {self.scale_factor}")
-        print(f"SELF.THRESHOLD = {self.threshold}")
-        print("="*50 + "\n")
+        # print("\n" + "="*50)
+        # print(f"SELF.LSTM_UNITS = {self.hidden_dim}")
+        # print(f"SELF.LSTM_EPOCHS = {self.lstm_epochs}")
+        # print(f"SELF.LSTM_DROPOUT = {self.lstm_dropout}")
+        # print(f"SELF.LSTM_GRADCLIP = {self.lstm_grad_clip_threshold}")
+        # print(f"SELF.LSTM_LEARNING = {self.learning_rate}")
+        # print(f"SELF.LSTM_WEIGHTDECAY = {self.weight_decay}")
+        # print(f"SELF.TARGET_VALUE = {self.target_value}")
+        # print(f"SELF.SCALE_FACTOR = {self.scale_factor}")
+        # print(f"SELF.THRESHOLD = {self.threshold}")
+        # print("="*50 + "\n")
 
     def train_lstm(self, x, y):
         # Get the original class labels

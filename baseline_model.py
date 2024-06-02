@@ -36,6 +36,7 @@ from cryptoaml.models import (AdaptiveXGBoostClassifier, AdaptiveStackedBoostCla
 
 def warn(*args, **kwargs):
     pass
+
 import warnings
 warnings.warn = warn
 
@@ -79,6 +80,7 @@ def evaluate_batch_incremental(model, data):
     true_test = []
     predictions_test = []
     probabilities_test = []  # List to store probabilities for AUC calculation
+    timestep_totals = []
     
     min_ts = data["ts"].min()
     max_ts = data["ts"].max()
@@ -104,6 +106,10 @@ def evaluate_batch_incremental(model, data):
         test_set = data[data["ts"] == ts + 1]
         x_test = test_set.iloc[:,:-1].values
         y_test = test_set["class"].values
+
+        # calculate the total number of 1s in y_test
+        total_ones = np.sum(y_test == 1)
+        timestep_totals.append(total_ones) 
     
         # predict test data for the current timestep + 1
         y_pred = model.predict(x_test)
@@ -196,12 +202,14 @@ def evaluate_batch_incremental(model, data):
     results["test_results"] = aggregated_metrics  # Store the computed metrics
     
     # Extract the F1 score from the aggregated metrics
-    f1_score = next((metric_value for metric_name, metric_value in aggregated_metrics if metric_name == "F1 Score"), None)
-    print(f"Average F1 Score: {f1_score:.4f}")
+    # f1_score = next((metric_value for metric_name, metric_value in aggregated_metrics if metric_name == "F1 Score"), None)
+    # # print(f"Average F1 Score: {f1_score:.4f}")
 
     # Store the metrics to a pandas df
     results["time_metrics"] = pd.DataFrame(results_time)
     # print(results)
+
+    # print(timestep_totals)
 
     return results
 
@@ -233,72 +241,72 @@ def evaluate(feature_set):
     experiment_results["LSTM_Base"][f_set] = {}
     experiment_results["LSTM_ASXGB"][f_set] = {}
 
-    # 2. Adapative Random Forest
-    print("Evaluating ARF")
-    arf = AdaptiveRandomForest(performance_metric="kappa")
-    experiment_results["ARF"][f_set] = evaluate_batch_incremental(arf, data_eval)
+    # # 2. Adapative Random Forest
+    # print("Evaluating ARF")
+    # arf = AdaptiveRandomForest(performance_metric="kappa")
+    # experiment_results["ARF"][f_set] = evaluate_batch_incremental(arf, data_eval)
     
-    # 2. Adapative Extreme Gradient Boosting with Replacement
-    # 3. Adapative Extreme Gradient Boosting with Push
-    # Adaptive XGBoost classifier parameters
-    n_estimators = 30       # Number of members in the ensemble
-    learning_rate = 0.3     # Learning rate or eta
-    max_depth = 6           # Max depth for each tree in the ensemble
-    max_window_size = 1000  # Max window size
-    min_window_size = 1     # set to activate the dynamic window strategy
-    detect_drift = False    # Enable/disable drift detection
+    # # 2. Adapative Extreme Gradient Boosting with Replacement
+    # # 3. Adapative Extreme Gradient Boosting with Push
+    # # Adaptive XGBoost classifier parameters
+    # n_estimators = 30       # Number of members in the ensemble
+    # learning_rate = 0.3     # Learning rate or eta
+    # max_depth = 6           # Max depth for each tree in the ensemble
+    # max_window_size = 1000  # Max window size
+    # min_window_size = 1     # set to activate the dynamic window strategy
+    # detect_drift = False    # Enable/disable drift detection
 
-    print("Evaluating AXGBr")
-    AXGBr = AdaptiveXGBoostClassifier(update_strategy='replace',
-                                      n_estimators=n_estimators,
-                                      learning_rate=learning_rate,
-                                      max_depth=max_depth,
-                                      max_window_size=max_window_size,
-                                      min_window_size=min_window_size,
-                                      detect_drift=detect_drift)
-    experiment_results["AXGBr"][f_set] = evaluate_batch_incremental(AXGBr, data_eval)
+    # print("Evaluating AXGBr")
+    # AXGBr = AdaptiveXGBoostClassifier(update_strategy='replace',
+    #                                   n_estimators=n_estimators,
+    #                                   learning_rate=learning_rate,
+    #                                   max_depth=max_depth,
+    #                                   max_window_size=max_window_size,
+    #                                   min_window_size=min_window_size,
+    #                                   detect_drift=detect_drift)
+    # experiment_results["AXGBr"][f_set] = evaluate_batch_incremental(AXGBr, data_eval)
 
-    print("Evaluating AXGBp")
-    AXGBp = AdaptiveXGBoostClassifier(update_strategy='push',
-                                      n_estimators=n_estimators,
-                                      learning_rate=learning_rate,
-                                      max_depth=max_depth,
-                                      max_window_size=max_window_size,
-                                      min_window_size=min_window_size,
-                                      detect_drift=detect_drift)
-    experiment_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval)
+    # print("Evaluating AXGBp")
+    # AXGBp = AdaptiveXGBoostClassifier(update_strategy='push',
+    #                                   n_estimators=n_estimators,
+    #                                   learning_rate=learning_rate,
+    #                                   max_depth=max_depth,
+    #                                   max_window_size=max_window_size,
+    #                                   min_window_size=min_window_size,
+    #                                   detect_drift=detect_drift)
+    # experiment_results["AXGBp"][f_set] = evaluate_batch_incremental(AXGBp, data_eval)
 
-    # 4. Proposed Method by the original authors
-    print("Evaluating ASXGB")
-    ASXGB = AdaptiveStackedBoostClassifier()
-    experiment_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval)
+    # # 4. Proposed Method by the original authors
+    # print("Evaluating ASXGB")
+    # ASXGB = AdaptiveStackedBoostClassifier()
+    # experiment_results["ASXGB"][f_set] = evaluate_batch_incremental(ASXGB, data_eval)
 
-    # 6. LSTM Method with Xgboost
-    print("Evaluating LSTM + ASXGB") 
-    LSTM_ASXGB = LSTM_AdaptiveStackedBoostClassifier(lstm_units=32,
-                                                     lstm_epochs=20,
-                                                     lstm_dropout=0.1,
-                                                     lstm_grad_clip_threshold=1,
-                                                     learning_rate=0.000001,
-                                                     weight_decay=0.1,
-                                                     target_value=0.69,
-                                                     scale_factor=0.9,
-                                                     threshold=0.5)
-    experiment_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval)
+    # # 6. LSTM Method with Xgboost
+    # print("Evaluating LSTM + ASXGB") 
+    # LSTM_ASXGB = LSTM_AdaptiveStackedBoostClassifier(lstm_units=32,
+    #                                                  lstm_epochs=20,
+    #                                                  lstm_dropout=0.1,
+    #                                                  lstm_grad_clip_threshold=1,
+    #                                                  learning_rate=0.000001,
+    #                                                  weight_decay=0.1,
+    #                                                  target_value=0.69,
+    #                                                  scale_factor=0.9,
+    #                                                  threshold=0.5)
+    # experiment_results["LSTM_ASXGB"][f_set] = evaluate_batch_incremental(LSTM_ASXGB, data_eval)
 
     # # 6. LSTM Method WITHOUT Xgboost
     print("Evaluating LSTM with no xgboost")
 
     # Hyperparameter values to search
     hyperparameters = {
-        'lstm_units': [32],
-        'lstm_epochs': [20],
-        'lstm_dropout': [0.2],
+        'lstm_units': [32], # 32, 64, 128
+        'lstm_epochs': [20], # 5, 10, 20, 40
+        'lstm_dropout': [0.2], # 0.2, 0.3, 0.4, 0.5
         'lstm_grad_clip_threshold': [1.0],
-        'learning_rate': [0.000001],
-        'weight_decay': [0.1],
+        'learning_rate': [0.000001], # 0.0001, 0.00001, 0.000001
+        'weight_decay': [0.1], # 0.1, 0.01, 0.001
         'target_value': [0.69],
-        'scale_factor': [0.9],
+        'scale_factor': [0.9], # 0.9, 1, 1.1
         'threshold': [0.5]
     }
 
@@ -315,7 +323,7 @@ def evaluate(feature_set):
         print(f'Performing iteration {i} of {total_combinations} now')
 
         # Time Estimation
-        # start_time_forward = time.time()
+        start_time_forward = time.time()
 
         # Unpack the hyperparameter values
         lstm_units, lstm_epochs, lstm_dropout, lstm_grad_clip_threshold, learning_rate, weight_decay, target_value, scale_factor, threshold = combination
@@ -337,39 +345,39 @@ def evaluate(feature_set):
         # Evaluate the model and store the results
         experiment_results["LSTM_Base"][f_set] = evaluate_batch_incremental(LSTM_base, data_eval)
         
-        # # Store the results for the current hyperparameter combination
-        # hyper_parameter_results[str(combination)] = experiment_results["LSTM_Base"][f_set]
+        # Store the results for the current hyperparameter combination
+        hyper_parameter_results[str(combination)] = experiment_results["LSTM_Base"][f_set]
 
-        # # Extract the F1 score from the experiment results
-        # f1_score = next(metric_value for metric_name, metric_value in experiment_results["LSTM_Base"][f_set]["test_results"] if metric_name == "F1 Score")
-        # print(f"F1 Score for iteration {i}: {f1_score:.4f}")
+        # Extract the F1 score from the experiment results
+        f1_score = next(metric_value for metric_name, metric_value in experiment_results["LSTM_Base"][f_set]["test_results"] if metric_name == "F1 Score")
+        print(f"F1 Score for iteration {i}: {f1_score:.4f}")
 
-        # # Time Estimation
-        # end_time_forward = time.time()
-        # tuning_time = end_time_forward - start_time_forward
-        # remaining_combinations = total_combinations - i
-        # total_estimated_time = tuning_time * (remaining_combinations)
+        # Time Estimation
+        end_time_forward = time.time()
+        tuning_time = end_time_forward - start_time_forward
+        remaining_combinations = total_combinations - i
+        total_estimated_time = tuning_time * (remaining_combinations)
 
-        # # Append the F1 score to the list
-        # f1_scores.append(f1_score)
+        # Append the F1 score to the list
+        f1_scores.append(f1_score)
 
-        # # Create a plot of the F1 scores
-        # plt.figure(figsize=(10, 6))
-        # plt.plot(range(1, len(f1_scores) + 1), f1_scores, marker='o')
-        # plt.xlabel('Hyperparameter Iteration')
-        # plt.ylabel('F1 Score')
-        # plt.title('F1 Score vs. Hyperparameter Iteration')
-        # plt.show()
+        # Create a plot of the F1 scores
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, len(f1_scores) + 1), f1_scores, marker='o')
+        plt.xlabel('Hyperparameter Iteration: (Units)')
+        plt.ylabel('F1 Score')
+        plt.title('F1 Score vs. Hyperparameter Iteration')
+        plt.show()
 
-        # # Print the total estimated time 
-        # print("\n" + "*" * 50)
-        # print(f"*{' ' * 48}*")
-        # print(f"*{' ' * 15}Total Estimated Time{' ' * 15}*")
-        # print(f"*{' ' * 48}*")
-        # print(f"*{' ' * 8}{total_estimated_time:.2f} seconds remaining{' ' * 8}*")
-        # print(f"*{' ' * 8}{remaining_combinations} combinations remaining{' ' * 8}*")
-        # print(f"*{' ' * 48}*")
-        # print("*" * 50 + "\n")
+        # Print the total estimated time 
+        print("\n" + "*" * 50)
+        print(f"*{' ' * 48}*")
+        print(f"*{' ' * 15}Total Estimated Time{' ' * 15}*")
+        print(f"*{' ' * 48}*")
+        print(f"*{' ' * 8}{total_estimated_time:.2f} seconds remaining{' ' * 8}*")
+        print(f"*{' ' * 8}{remaining_combinations} combinations remaining{' ' * 8}*")
+        print(f"*{' ' * 48}*")
+        print("*" * 50 + "\n")
 
 
     # After all evaluations are done, save each model's results
@@ -380,10 +388,12 @@ def evaluate(feature_set):
                 results["time_metrics"].to_csv(results_filename, index=False)
                 print(f"Results saved to {results_filename}")
 
-    # # Convert the hyperparameter results to a DataFrame and save it
-    # hyper_parameter_df = pd.DataFrame(hyper_parameter_results).transpose()
-    # hyper_parameter_df.to_csv("hyperparameter_tuning_results.csv", index=True)
-    # print("Hyperparameter tuning results saved to hyperparameter_tuning_results.csv")
+    # Convert the hyperparameter results to a DataFrame and save it
+    hyper_parameter_df = pd.DataFrame(hyper_parameter_results).transpose()
+    hyper_parameter_df.to_csv("hyperparameter_tuning_results.csv", index=True)
+    print("Hyperparameter tuning results saved to hyperparameter_tuning_results.csv")
+
+    print(f1_scores)
 
 def evaluate_batch_incremental_norolling(model, train_data, test_data):
     results = {}
@@ -624,11 +634,11 @@ def evaluate_norolling(feature_set):
                 print(f"Results saved to {results_filename}")
 
 # Original Rolling Windows by the Authors 
-# evaluate("AF")
+evaluate("AF")
 # evaluate("LF")
 
 # Our Split
-evaluate_norolling("AF")
-evaluate_norolling("LF")
+# evaluate_norolling("AF")
+# evaluate_norolling("LF")
 
 print('Experiments complete :)')
